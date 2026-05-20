@@ -181,7 +181,7 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 ## Usage
 
 ### Starting the Connection
-![BlenderMCP in the sidebar](assets/addon-instructions.png)
+![BlenderMCP in the sidebar](docs/assets/addon-instructions.png)
 
 1. In Blender, go to the 3D View sidebar (press N if not visible)
 2. Find the "BlenderMCP" tab
@@ -193,7 +193,7 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 
 Once the config file has been set on Claude, and the addon is running on Blender, you will see a hammer icon with tools for the Blender MCP.
 
-![BlenderMCP in the sidebar](assets/hammer-icon.png)
+![BlenderMCP in the sidebar](docs/assets/hammer-icon.png)
 
 #### Capabilities
 
