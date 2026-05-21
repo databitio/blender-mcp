@@ -1148,6 +1148,29 @@ def create_ocean_rig(ctx: Context, chunk_size: int = 64) -> str:
         return f"Error creating ocean rig: {str(e)}"
 
 
+@telemetry_tool("bind_ocean_rig")
+@mcp.tool()
+def bind_ocean_rig(ctx: Context) -> str:
+    """
+    Bind the OceanChunk mesh to the OceanRig armature using automatic weights.
+    Each bone gets a vertex group influencing its local region of the mesh.
+    Requires both OceanChunk and OceanRig to exist.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("bind_ocean_rig", {})
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Bound '{r['mesh']}' to '{r['armature']}' with automatic weights.\n"
+            f"Vertex groups ({r['group_count']}): {', '.join(r['vertex_groups'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error binding ocean rig: {str(e)}")
+        return f"Error binding ocean rig: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""

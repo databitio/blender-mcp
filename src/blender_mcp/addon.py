@@ -215,6 +215,7 @@ class BlenderMCPServer:
             "get_hunyuan3d_status": self.get_hunyuan3d_status,
             "create_ocean_mesh": self.create_ocean_mesh,
             "create_ocean_rig": self.create_ocean_rig,
+            "bind_ocean_rig": self.bind_ocean_rig,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2398,6 +2399,35 @@ class BlenderMCPServer:
             "bone_count": len(names),
             "bones": names,
             "spacing": round(spacing, 4),
+        }
+
+    def bind_ocean_rig(self):
+        """Parent ocean mesh to armature with automatic weights."""
+        mesh_obj = bpy.data.objects.get("OceanChunk")
+        arm_obj = bpy.data.objects.get("OceanRig")
+        if not mesh_obj:
+            return {"error": "OceanChunk not found"}
+        if not arm_obj:
+            return {"error": "OceanRig not found"}
+
+        if mesh_obj.parent:
+            mesh_obj.parent = None
+        for mod in list(mesh_obj.modifiers):
+            if mod.type == 'ARMATURE':
+                mesh_obj.modifiers.remove(mod)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        mesh_obj.select_set(True)
+        arm_obj.select_set(True)
+        bpy.context.view_layer.objects.active = arm_obj
+        bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+
+        groups = [g.name for g in mesh_obj.vertex_groups]
+        return {
+            "mesh": mesh_obj.name,
+            "armature": arm_obj.name,
+            "vertex_groups": groups,
+            "group_count": len(groups),
         }
 
 # Blender Addon Preferences
