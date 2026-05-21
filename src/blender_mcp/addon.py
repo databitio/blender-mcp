@@ -2479,8 +2479,8 @@ class BlenderMCPServer:
             # for smooth Bezier handles at the loop boundary
             for f in range(frame_count + 1):
                 t = f / frame_count * 2 * math.pi
-                bone.location.z = amp * math.sin(t + phase)
-                bone.keyframe_insert(data_path="location", frame=f, index=2)
+                bone.location.y = amp * math.sin(t + phase)
+                bone.keyframe_insert(data_path="location", frame=f, index=1)
 
         for name, p in masters.items():
             keyframe_bone(name, p["phase"], p["amp"])
