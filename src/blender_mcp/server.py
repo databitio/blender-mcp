@@ -1086,6 +1086,39 @@ def import_generated_asset_hunyuan(
         return f"Error generating Hunyuan3D task: {str(e)}"
 
 
+@telemetry_tool("create_ocean_mesh")
+@mcp.tool()
+def create_ocean_mesh(ctx: Context, chunk_size: int = 64, subdivisions: int = 6) -> str:
+    """
+    Create the ocean chunk mesh: a subdivided plane with flat shading and planar UVs.
+    Part of the ocean tiling workflow. Run this first, then create_ocean_rig.
+
+    Parameters:
+    - chunk_size: Size in Blender units, maps 1:1 to Roblox studs (default 64)
+    - subdivisions: Quad subdivisions per axis (default 6 = 72 triangles)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("create_ocean_mesh", {
+            "chunk_size": chunk_size,
+            "subdivisions": subdivisions,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Ocean mesh '{r['name']}' created.\n"
+            f"Vertices: {r['vertices']}, Faces: {r['faces']}, "
+            f"Triangles: {r['triangles']}\n"
+            f"Size: {r['chunk_size']}x{r['chunk_size']}, "
+            f"Subdivisions: {r['subdivisions']}x{r['subdivisions']}\n"
+            f"UVs: planar 0-1, Shading: flat"
+        )
+    except Exception as e:
+        logger.error(f"Error creating ocean mesh: {str(e)}")
+        return f"Error creating ocean mesh: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""
