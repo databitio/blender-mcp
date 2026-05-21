@@ -2488,7 +2488,12 @@ class BlenderMCPServer:
             p = masters[master_name]
             keyframe_bone(mirror_name, p["phase"], p["amp"])
 
-        for fc in action.fcurves:
+        # Blender 5.x uses layered actions; 3.x/4.x use legacy fcurves
+        if hasattr(action, 'fcurves'):
+            fcurves = action.fcurves
+        else:
+            fcurves = action.layers[0].strips[0].channelbags[0].fcurves
+        for fc in fcurves:
             for kf in fc.keyframe_points:
                 kf.interpolation = 'BEZIER'
 
