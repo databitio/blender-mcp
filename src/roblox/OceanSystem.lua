@@ -47,7 +47,6 @@ local OceanSystem = {}
 
 -- Module state
 local running: boolean = false
-local cfg: ResolvedConfig? = nil
 local activeChunks: { [string]: MeshPart } = {}
 local chunkPool: { MeshPart } = {}
 local heartbeatConn: RBXScriptConnection? = nil
@@ -167,7 +166,6 @@ function OceanSystem.start(rawConfig: OceanConfig)
     end
 
     local c = resolveConfig(rawConfig)
-    cfg = c
     running = true
     scrollU = 0
     scrollV = 0
@@ -190,10 +188,10 @@ function OceanSystem.stop()
         heartbeatConn = nil
     end
 
-    for key, chunk in pairs(activeChunks) do
+    for _, chunk in pairs(activeChunks) do
         chunk:Destroy()
-        activeChunks[key] = nil
     end
+    table.clear(activeChunks)
 
     for _, chunk in ipairs(chunkPool) do
         chunk:Destroy()
@@ -205,7 +203,6 @@ function OceanSystem.stop()
         container = nil
     end
 
-    cfg = nil
     running = false
     scrollU = 0
     scrollV = 0

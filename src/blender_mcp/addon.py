@@ -2475,7 +2475,9 @@ class BlenderMCPServer:
             bone = arm_obj.pose.bones.get(name)
             if not bone:
                 return
-            for f in range(frame_count):
+            # frame_count+1 keyframes: extra frame at end matches frame 0
+            # for smooth Bezier handles at the loop boundary
+            for f in range(frame_count + 1):
                 t = f / frame_count * 2 * math.pi
                 bone.location.z = amp * math.sin(t + phase)
                 bone.keyframe_insert(data_path="location", frame=f, index=2)
