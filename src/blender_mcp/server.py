@@ -1212,6 +1212,38 @@ def animate_ocean_waves(
         return f"Error animating ocean waves: {str(e)}"
 
 
+@telemetry_tool("export_ocean_chunk")
+@mcp.tool()
+def export_ocean_chunk(ctx: Context, filepath: str = "") -> str:
+    """
+    Export the OceanChunk mesh and OceanRig armature as FBX with Roblox-compatible
+    settings. Also saves a .blend checkpoint. Axis: -Z forward, Y up.
+
+    Parameters:
+    - filepath: Output FBX path (default: beside .blend file or temp directory)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("export_ocean_fbx", {
+            "filepath": filepath,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        size_kb = round(r["fbx_size_bytes"] / 1024, 1)
+        return (
+            f"Exported ocean chunk:\n"
+            f"  FBX: {r['fbx_path']} ({size_kb} KB)\n"
+            f"  Blend: {r['blend_path']}\n"
+            f"  Axis: {r['settings']['axis_forward']} fwd, "
+            f"{r['settings']['axis_up']} up\n"
+            f"  Leaf bones: off, Simplify: 0.0"
+        )
+    except Exception as e:
+        logger.error(f"Error exporting ocean chunk: {str(e)}")
+        return f"Error exporting ocean chunk: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""
