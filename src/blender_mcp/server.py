@@ -1171,6 +1171,47 @@ def bind_ocean_rig(ctx: Context) -> str:
         return f"Error binding ocean rig: {str(e)}"
 
 
+@telemetry_tool("animate_ocean_waves")
+@mcp.tool()
+def animate_ocean_waves(
+    ctx: Context,
+    frame_count: int = 72,
+    amplitude: float = 1.5,
+    fps: int = 30,
+) -> str:
+    """
+    Create a looping wave animation on the OceanRig bones. Each bone follows
+    an offset sine curve on the Z axis. Edge bones are mirrored so adjacent
+    chunks tile seamlessly. Requires OceanRig with bound mesh.
+
+    Parameters:
+    - frame_count: Total frames in the loop (default 72, = 2.4s at 30fps)
+    - amplitude: Maximum Z displacement in Blender units (default 1.5)
+    - fps: Playback frame rate (default 30)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("animate_ocean_waves", {
+            "frame_count": frame_count,
+            "amplitude": amplitude,
+            "fps": fps,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Wave animation '{r['action']}' created.\n"
+            f"Frames: {r['frame_count']} @ {r['fps']}fps "
+            f"({r['duration_seconds']}s loop)\n"
+            f"Amplitude: {r['amplitude']} units\n"
+            f"Masters: {', '.join(r['master_bones'])}\n"
+            f"Mirrored: {', '.join(r['mirrored_bones'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error animating ocean waves: {str(e)}")
+        return f"Error animating ocean waves: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""

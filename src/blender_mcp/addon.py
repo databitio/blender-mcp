@@ -216,6 +216,7 @@ class BlenderMCPServer:
             "create_ocean_mesh": self.create_ocean_mesh,
             "create_ocean_rig": self.create_ocean_rig,
             "bind_ocean_rig": self.bind_ocean_rig,
+            "animate_ocean_waves": self.animate_ocean_waves,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2428,6 +2429,76 @@ class BlenderMCPServer:
             "armature": arm_obj.name,
             "vertex_groups": groups,
             "group_count": len(groups),
+        }
+
+    def animate_ocean_waves(self, frame_count=72, amplitude=1.5, fps=30):
+        """Create looping sine-wave bone animation with edge-mirrored keyframes."""
+        import math
+
+        arm_obj = bpy.data.objects.get("OceanRig")
+        if not arm_obj:
+            return {"error": "OceanRig not found"}
+
+        scene = bpy.context.scene
+        scene.render.fps = fps
+        scene.frame_start = 0
+        scene.frame_end = frame_count - 1
+
+        action_name = "OceanWaveAction"
+        if action_name in bpy.data.actions:
+            bpy.data.actions.remove(bpy.data.actions[action_name])
+        action = bpy.data.actions.new(name=action_name)
+
+        if not arm_obj.animation_data:
+            arm_obj.animation_data_create()
+        arm_obj.animation_data.action = action
+
+        masters = {
+            "Wave_R1_C1": {"phase": 0.0,              "amp": amplitude},
+            "Wave_R0_C1": {"phase": math.pi / 3,      "amp": amplitude * 0.8},
+            "Wave_R1_C0": {"phase": 2 * math.pi / 3,  "amp": amplitude * 0.7},
+            "Wave_R0_C0": {"phase": math.pi,           "amp": amplitude * 0.6},
+        }
+        mirrors = {
+            "Wave_R2_C1": "Wave_R0_C1",
+            "Wave_R1_C2": "Wave_R1_C0",
+            "Wave_R0_C2": "Wave_R0_C0",
+            "Wave_R2_C0": "Wave_R0_C0",
+            "Wave_R2_C2": "Wave_R0_C0",
+        }
+
+        bpy.context.view_layer.objects.active = arm_obj
+        bpy.ops.object.mode_set(mode='POSE')
+
+        def keyframe_bone(name, phase, amp):
+            bone = arm_obj.pose.bones.get(name)
+            if not bone:
+                return
+            for f in range(frame_count):
+                t = f / frame_count * 2 * math.pi
+                bone.location.z = amp * math.sin(t + phase)
+                bone.keyframe_insert(data_path="location", frame=f, index=2)
+
+        for name, p in masters.items():
+            keyframe_bone(name, p["phase"], p["amp"])
+        for mirror_name, master_name in mirrors.items():
+            p = masters[master_name]
+            keyframe_bone(mirror_name, p["phase"], p["amp"])
+
+        for fc in action.fcurves:
+            for kf in fc.keyframe_points:
+                kf.interpolation = 'BEZIER'
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {
+            "action": action_name,
+            "frame_count": frame_count,
+            "fps": fps,
+            "duration_seconds": round(frame_count / fps, 2),
+            "amplitude": amplitude,
+            "master_bones": list(masters.keys()),
+            "mirrored_bones": list(mirrors.keys()),
         }
 
 # Blender Addon Preferences
