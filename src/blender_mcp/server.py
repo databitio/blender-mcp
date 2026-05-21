@@ -1119,6 +1119,35 @@ def create_ocean_mesh(ctx: Context, chunk_size: int = 64, subdivisions: int = 6)
         return f"Error creating ocean mesh: {str(e)}"
 
 
+@telemetry_tool("create_ocean_rig")
+@mcp.tool()
+def create_ocean_rig(ctx: Context, chunk_size: int = 64) -> str:
+    """
+    Create a 3x3 bone grid armature for the ocean chunk. Bones are named
+    Wave_R{row}_C{col} and placed at even intervals across the plane.
+    Requires OceanChunk mesh to exist (run create_ocean_mesh first).
+
+    Parameters:
+    - chunk_size: Must match the chunk_size used in create_ocean_mesh (default 64)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("create_ocean_rig", {
+            "chunk_size": chunk_size,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Ocean rig '{r['name']}' created with {r['bone_count']} bones.\n"
+            f"Bone spacing: {r['spacing']} units\n"
+            f"Bones: {', '.join(r['bones'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error creating ocean rig: {str(e)}")
+        return f"Error creating ocean rig: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""

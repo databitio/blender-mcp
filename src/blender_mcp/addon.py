@@ -214,6 +214,7 @@ class BlenderMCPServer:
             "get_sketchfab_status": self.get_sketchfab_status,
             "get_hunyuan3d_status": self.get_hunyuan3d_status,
             "create_ocean_mesh": self.create_ocean_mesh,
+            "create_ocean_rig": self.create_ocean_rig,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2355,6 +2356,48 @@ class BlenderMCPServer:
             "triangles": len(mesh.polygons) * 2,
             "chunk_size": chunk_size,
             "subdivisions": subdivisions,
+        }
+
+    def create_ocean_rig(self, chunk_size=64):
+        """Create 3x3 bone grid armature for ocean chunk wave deformation."""
+        mesh_obj = bpy.data.objects.get("OceanChunk")
+        if not mesh_obj:
+            return {"error": "OceanChunk not found. Run create_ocean_mesh first."}
+
+        existing = bpy.data.objects.get("OceanRig")
+        if existing:
+            bpy.data.objects.remove(existing, do_unlink=True)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.armature_add(location=(0, 0, 0))
+        arm_obj = bpy.context.active_object
+        arm_obj.name = "OceanRig"
+        arm_obj.data.name = "OceanRigData"
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        for b in list(arm_obj.data.edit_bones):
+            arm_obj.data.edit_bones.remove(b)
+
+        spacing = chunk_size / 3.0
+        origin = -chunk_size / 2.0 + spacing / 2.0
+        names = []
+        for row in range(3):
+            for col in range(3):
+                name = f"Wave_R{row}_C{col}"
+                bone = arm_obj.data.edit_bones.new(name)
+                x = origin + col * spacing
+                y = origin + row * spacing
+                bone.head = (x, y, 0)
+                bone.tail = (x, y, 1)
+                names.append(name)
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {
+            "name": arm_obj.name,
+            "bone_count": len(names),
+            "bones": names,
+            "spacing": round(spacing, 4),
         }
 
 # Blender Addon Preferences
