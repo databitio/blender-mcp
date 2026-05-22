@@ -218,6 +218,7 @@ class BlenderMCPServer:
             "bind_ocean_rig": self.bind_ocean_rig,
             "animate_ocean_waves": self.animate_ocean_waves,
             "export_ocean_fbx": self.export_ocean_fbx,
+            "create_ocean_mesh_4x4": self.create_ocean_mesh_4x4,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2555,6 +2556,42 @@ class BlenderMCPServer:
                 "add_leaf_bones": False,
                 "bake_anim_simplify_factor": 0.0,
             },
+        }
+
+    def create_ocean_mesh_4x4(self, chunk_size=64, subdivisions=8):
+        """Create 8x8 subdivided plane with flat shading and planar UVs for 4x4 ocean chunk."""
+        existing = bpy.data.objects.get("OceanChunk4x4")
+        if existing:
+            bpy.data.objects.remove(existing, do_unlink=True)
+
+        bpy.ops.mesh.primitive_plane_add(size=chunk_size, location=(0, 0, 0))
+        plane = bpy.context.active_object
+        plane.name = "OceanChunk4x4"
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.subdivide(number_cuts=subdivisions - 1)
+        bpy.ops.mesh.faces_shade_flat()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        mesh = plane.data
+        uv_layer = mesh.uv_layers.active or mesh.uv_layers.new(name="UVMap")
+        half = chunk_size / 2.0
+        for poly in mesh.polygons:
+            for li in poly.loop_indices:
+                v = mesh.vertices[mesh.loops[li].vertex_index]
+                uv_layer.data[li].uv = (
+                    (v.co.x + half) / chunk_size,
+                    (v.co.y + half) / chunk_size,
+                )
+
+        return {
+            "name": plane.name,
+            "vertices": len(mesh.vertices),
+            "faces": len(mesh.polygons),
+            "triangles": len(mesh.polygons) * 2,
+            "chunk_size": chunk_size,
+            "subdivisions": subdivisions,
         }
 
 # Blender Addon Preferences
