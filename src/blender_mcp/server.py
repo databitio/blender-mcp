@@ -1535,6 +1535,51 @@ PHASE 7 — NEXT STEPS
   3. Use OceanSystem.lua with the asset ID to spawn the tiling grid
 """
 
+@mcp.prompt()
+def ocean_chunk_4x4_workflow() -> str:
+    """Step-by-step workflow for creating a 4x4 tiling ocean chunk in Blender"""
+    return """Ocean Chunk 4x4 Authoring Workflow
+===================================
+
+Higher-detail variant with a 4x4 bone grid (16 bones, 9 independent masters).
+Follow these steps in order. Pause at each checkpoint for user review.
+
+PHASE 1 — SETUP
+  Call get_scene_info() to verify the MCP connection is live.
+
+PHASE 2 — MESH (checkpoint after)
+  Call create_ocean_mesh_4x4(chunk_size=64, subdivisions=8).
+  Expected: 81 vertices, 64 faces, 128 triangles, flat shaded, UVs 0-1.
+  -> Take a viewport screenshot for the user to inspect geometry.
+
+PHASE 3 — RIG (checkpoint after)
+  Call create_ocean_rig_4x4(chunk_size=64).
+  Expected: 16 bones named Wave4x4_R{0-3}_C{0-3}, spaced 16 units apart.
+  -> Take a viewport screenshot for the user to inspect bone placement.
+
+PHASE 4 — BIND
+  Call bind_ocean_rig_4x4().
+  Expected: 16 vertex groups, one per bone, automatic weights applied.
+
+PHASE 5 — ANIMATE (checkpoint after)
+  Call animate_ocean_waves_4x4(frame_count=72, amplitude=1.5, fps=30).
+  Expected: 2.4-second loop, 9 master bones + 7 mirrored, Bezier interpolation.
+  Edge mirroring: R0=R3 rows, C0=C3 columns, all corners identical.
+  -> Play animation and take screenshot for user review.
+
+PHASE 6 — EXPORT (checkpoint after)
+  Call export_ocean_chunk_4x4().
+  Expected: FBX with baked animation + .blend checkpoint saved.
+  Settings: -Z forward, Y up, no leaf bones, simplify=0.
+
+PHASE 7 — NEXT STEPS
+  Tell the user:
+  1. Import the FBX into Roblox Studio
+  2. Publish the MeshPart to get an rbxassetid
+  3. Use OceanSystem.lua with the asset ID to spawn the tiling grid
+     (same Lua module works for both 3x3 and 4x4 chunks)
+"""
+
 # Main execution
 
 def main():
