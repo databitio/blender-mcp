@@ -1244,6 +1244,164 @@ def export_ocean_chunk(ctx: Context, filepath: str = "") -> str:
         return f"Error exporting ocean chunk: {str(e)}"
 
 
+@telemetry_tool("create_ocean_mesh_4x4")
+@mcp.tool()
+def create_ocean_mesh_4x4(ctx: Context, chunk_size: int = 64, subdivisions: int = 8) -> str:
+    """
+    Create the 4x4 ocean chunk mesh: an 8x8 subdivided plane with flat shading and planar UVs.
+    Higher resolution variant of create_ocean_mesh for use with the 4x4 bone grid.
+
+    Parameters:
+    - chunk_size: Size in Blender units, maps 1:1 to Roblox studs (default 64)
+    - subdivisions: Quad subdivisions per axis (default 8 = 128 triangles)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("create_ocean_mesh_4x4", {
+            "chunk_size": chunk_size,
+            "subdivisions": subdivisions,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Ocean mesh '{r['name']}' created (4x4 variant).\n"
+            f"Vertices: {r['vertices']}, Faces: {r['faces']}, "
+            f"Triangles: {r['triangles']}\n"
+            f"Size: {r['chunk_size']}x{r['chunk_size']}, "
+            f"Subdivisions: {r['subdivisions']}x{r['subdivisions']}\n"
+            f"UVs: planar 0-1, Shading: flat"
+        )
+    except Exception as e:
+        logger.error(f"Error creating ocean mesh 4x4: {str(e)}")
+        return f"Error creating ocean mesh 4x4: {str(e)}"
+
+
+@telemetry_tool("create_ocean_rig_4x4")
+@mcp.tool()
+def create_ocean_rig_4x4(ctx: Context, chunk_size: int = 64) -> str:
+    """
+    Create a 4x4 bone grid armature for the ocean chunk. Bones are named
+    Wave4x4_R{row}_C{col} and placed at even intervals across the plane.
+    Requires OceanChunk4x4 mesh to exist (run create_ocean_mesh_4x4 first).
+
+    Parameters:
+    - chunk_size: Must match the chunk_size used in create_ocean_mesh_4x4 (default 64)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("create_ocean_rig_4x4", {
+            "chunk_size": chunk_size,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Ocean rig '{r['name']}' created with {r['bone_count']} bones (4x4 variant).\n"
+            f"Bone spacing: {r['spacing']} units\n"
+            f"Bones: {', '.join(r['bones'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error creating ocean rig 4x4: {str(e)}")
+        return f"Error creating ocean rig 4x4: {str(e)}"
+
+
+@telemetry_tool("bind_ocean_rig_4x4")
+@mcp.tool()
+def bind_ocean_rig_4x4(ctx: Context) -> str:
+    """
+    Bind the OceanChunk4x4 mesh to the OceanRig4x4 armature using automatic weights.
+    Each bone gets a vertex group influencing its local region of the mesh.
+    Requires both OceanChunk4x4 and OceanRig4x4 to exist.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("bind_ocean_rig_4x4", {})
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Bound '{r['mesh']}' to '{r['armature']}' with automatic weights (4x4 variant).\n"
+            f"Vertex groups ({r['group_count']}): {', '.join(r['vertex_groups'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error binding ocean rig 4x4: {str(e)}")
+        return f"Error binding ocean rig 4x4: {str(e)}"
+
+
+@telemetry_tool("animate_ocean_waves_4x4")
+@mcp.tool()
+def animate_ocean_waves_4x4(
+    ctx: Context,
+    frame_count: int = 72,
+    amplitude: float = 1.5,
+    fps: int = 30,
+) -> str:
+    """
+    Create a looping wave animation on the OceanRig4x4 bones. Uses 9 master bones
+    with distinct phase offsets for a rich rolling wave, plus 7 edge-mirrored bones
+    for seamless chunk tiling. Requires OceanRig4x4 with bound mesh.
+
+    Parameters:
+    - frame_count: Total frames in the loop (default 72, = 2.4s at 30fps)
+    - amplitude: Maximum displacement in Blender units (default 1.5)
+    - fps: Playback frame rate (default 30)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("animate_ocean_waves_4x4", {
+            "frame_count": frame_count,
+            "amplitude": amplitude,
+            "fps": fps,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        return (
+            f"Wave animation '{r['action']}' created (4x4 variant).\n"
+            f"Frames: {r['frame_count']} @ {r['fps']}fps "
+            f"({r['duration_seconds']}s loop)\n"
+            f"Amplitude: {r['amplitude']} units\n"
+            f"Masters ({len(r['master_bones'])}): {', '.join(r['master_bones'])}\n"
+            f"Mirrored ({len(r['mirrored_bones'])}): {', '.join(r['mirrored_bones'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error animating ocean waves 4x4: {str(e)}")
+        return f"Error animating ocean waves 4x4: {str(e)}"
+
+
+@telemetry_tool("export_ocean_chunk_4x4")
+@mcp.tool()
+def export_ocean_chunk_4x4(ctx: Context, filepath: str = "") -> str:
+    """
+    Export the OceanChunk4x4 mesh and OceanRig4x4 armature as FBX with Roblox-compatible
+    settings. Also saves a .blend checkpoint. Axis: -Z forward, Y up.
+
+    Parameters:
+    - filepath: Output FBX path (default: beside .blend file or temp directory)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("export_ocean_fbx_4x4", {
+            "filepath": filepath,
+        })
+        if "error" in result.get("result", {}):
+            return f"Error: {result['result']['error']}"
+        r = result.get("result", {})
+        size_kb = round(r["fbx_size_bytes"] / 1024, 1)
+        return (
+            f"Exported ocean chunk (4x4 variant):\n"
+            f"  FBX: {r['fbx_path']} ({size_kb} KB)\n"
+            f"  Blend: {r['blend_path']}\n"
+            f"  Axis: {r['settings']['axis_forward']} fwd, "
+            f"{r['settings']['axis_up']} up\n"
+            f"  Leaf bones: off, Simplify: 0.0"
+        )
+    except Exception as e:
+        logger.error(f"Error exporting ocean chunk 4x4: {str(e)}")
+        return f"Error exporting ocean chunk 4x4: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""
