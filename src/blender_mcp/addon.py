@@ -220,6 +220,7 @@ class BlenderMCPServer:
             "export_ocean_fbx": self.export_ocean_fbx,
             "create_ocean_mesh_4x4": self.create_ocean_mesh_4x4,
             "create_ocean_rig_4x4": self.create_ocean_rig_4x4,
+            "bind_ocean_rig_4x4": self.bind_ocean_rig_4x4,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2635,6 +2636,35 @@ class BlenderMCPServer:
             "bone_count": len(names),
             "bones": names,
             "spacing": round(spacing, 4),
+        }
+
+    def bind_ocean_rig_4x4(self):
+        """Parent 4x4 ocean mesh to armature with automatic weights."""
+        mesh_obj = bpy.data.objects.get("OceanChunk4x4")
+        arm_obj = bpy.data.objects.get("OceanRig4x4")
+        if not mesh_obj:
+            return {"error": "OceanChunk4x4 not found"}
+        if not arm_obj:
+            return {"error": "OceanRig4x4 not found"}
+
+        if mesh_obj.parent:
+            mesh_obj.parent = None
+        for mod in list(mesh_obj.modifiers):
+            if mod.type == 'ARMATURE':
+                mesh_obj.modifiers.remove(mod)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        mesh_obj.select_set(True)
+        arm_obj.select_set(True)
+        bpy.context.view_layer.objects.active = arm_obj
+        bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+
+        groups = [g.name for g in mesh_obj.vertex_groups]
+        return {
+            "mesh": mesh_obj.name,
+            "armature": arm_obj.name,
+            "vertex_groups": groups,
+            "group_count": len(groups),
         }
 
 # Blender Addon Preferences
