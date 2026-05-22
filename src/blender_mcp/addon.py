@@ -222,6 +222,7 @@ class BlenderMCPServer:
             "create_ocean_rig_4x4": self.create_ocean_rig_4x4,
             "bind_ocean_rig_4x4": self.bind_ocean_rig_4x4,
             "animate_ocean_waves_4x4": self.animate_ocean_waves_4x4,
+            "export_ocean_fbx_4x4": self.export_ocean_fbx_4x4,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2747,6 +2748,54 @@ class BlenderMCPServer:
             "amplitude": amplitude,
             "master_bones": list(masters.keys()),
             "mirrored_bones": list(mirrors.keys()),
+        }
+
+    def export_ocean_fbx_4x4(self, filepath=""):
+        """Export 4x4 ocean chunk + rig as FBX with Roblox-compatible axis and baked animation."""
+        mesh_obj = bpy.data.objects.get("OceanChunk4x4")
+        arm_obj = bpy.data.objects.get("OceanRig4x4")
+        if not mesh_obj:
+            return {"error": "OceanChunk4x4 not found"}
+        if not arm_obj:
+            return {"error": "OceanRig4x4 not found"}
+
+        if not filepath:
+            base = bpy.path.abspath("//") if bpy.data.filepath else tempfile.gettempdir()
+            filepath = os.path.join(base, "OceanChunk4x4.fbx")
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+
+        blend_path = filepath.replace(".fbx", ".blend")
+        bpy.ops.wm.save_as_mainfile(filepath=blend_path, copy=True)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        mesh_obj.select_set(True)
+        arm_obj.select_set(True)
+        bpy.context.view_layer.objects.active = arm_obj
+
+        bpy.ops.export_scene.fbx(
+            filepath=filepath,
+            use_selection=True,
+            object_types={'MESH', 'ARMATURE'},
+            use_mesh_modifiers=True,
+            add_leaf_bones=False,
+            bake_anim=True,
+            bake_anim_use_all_bones=True,
+            bake_anim_simplify_factor=0.0,
+            axis_forward='-Z',
+            axis_up='Y',
+            path_mode='AUTO',
+        )
+
+        return {
+            "fbx_path": filepath,
+            "blend_path": blend_path,
+            "fbx_size_bytes": os.path.getsize(filepath),
+            "settings": {
+                "axis_forward": "-Z",
+                "axis_up": "Y",
+                "add_leaf_bones": False,
+                "bake_anim_simplify_factor": 0.0,
+            },
         }
 
 # Blender Addon Preferences
