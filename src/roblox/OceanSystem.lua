@@ -149,4 +149,90 @@ local function updateBones(c: ResolvedConfig, dt: number)
     end
 end
 
+local function createChunk(c: ResolvedConfig): ChunkData
+    local part = c.chunkTemplate:Clone()
+    part.Anchored = true
+    part.CanCollide = false
+    part.CastShadow = false
+
+    if c.textureId then
+        local tex = Instance.new("Texture")
+        tex.Texture = c.textureId
+        tex.Face = Enum.NormalId.Top
+        tex.StudsPerTileU = c.studsPerTile
+        tex.StudsPerTileV = c.studsPerTile
+        tex.Parent = part
+    end
+
+    local bones, offsets = cacheBones(part)
+    return { part = part, bones = bones, offsets = offsets }
+end
+
+local function acquireChunk(c: ResolvedConfig): ChunkData
+    if #chunkPool > 0 then
+        return table.remove(chunkPool) :: ChunkData
+    end
+    return createChunk(c)
+end
+
+local function releaseChunk(chunk: ChunkData)
+    for _, bone in ipairs(chunk.bones) do
+        bone.Transform = CFrame.identity
+    end
+    chunk.part.Parent = nil
+    table.insert(chunkPool, chunk)
+end
+
+local function updateGrid(c: ResolvedConfig)
+    local cam = Workspace.CurrentCamera
+    if not cam then
+        return
+    end
+
+    local pos = cam.CFrame.Position
+    local cx = math.floor(pos.X / c.chunkSize)
+    local cz = math.floor(pos.Z / c.chunkSize)
+    local r = c.gridRadius
+
+    local needed: { [string]: { number } } = {}
+    for dx = -r, r do
+        for dz = -r, r do
+            needed[chunkKey(cx + dx, cz + dz)] = { cx + dx, cz + dz }
+        end
+    end
+
+    for key, chunk in pairs(activeChunks) do
+        if not needed[key] then
+            releaseChunk(chunk)
+            activeChunks[key] = nil
+        end
+    end
+
+    for key, cell in pairs(needed) do
+        if not activeChunks[key] then
+            local chunk = acquireChunk(c)
+            chunk.part.Position = Vector3.new(
+                cell[1] * c.chunkSize,
+                c.baseHeight,
+                cell[2] * c.chunkSize
+            )
+            chunk.part.Parent = container
+            activeChunks[key] = chunk
+        end
+    end
+end
+
+local function updateTextures(c: ResolvedConfig, dt: number)
+    scrollU += c.scrollSpeed.X * dt
+    scrollV += c.scrollSpeed.Y * dt
+
+    for _, chunk in pairs(activeChunks) do
+        local tex = chunk.part:FindFirstChildOfClass("Texture")
+        if tex then
+            tex.OffsetStudsU = scrollU
+            tex.OffsetStudsV = scrollV
+        end
+    end
+end
+
 return OceanSystem
