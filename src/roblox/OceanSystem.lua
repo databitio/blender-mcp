@@ -109,4 +109,44 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
     }
 end
 
+local function waveHeight(x: number, z: number, time: number, c: ResolvedConfig): number
+    local y = 0
+    for _, wave in ipairs(c.waves) do
+        y += wave.amplitude * math.sin(
+            wave.frequencyX * x + wave.frequencyZ * z + wave.phase + wave.speed * time
+        )
+    end
+    return y / #c.waves
+end
+
+local function cacheBones(part: MeshPart): ({ Bone }, { Vector3 })
+    local bones: { Bone } = {}
+    local offsets: { Vector3 } = {}
+    for _, desc in ipairs(part:GetDescendants()) do
+        if desc:IsA("Bone") then
+            table.insert(bones, desc)
+            table.insert(offsets, desc.Position)
+        end
+    end
+    if #bones == 0 and not warnedNoBones then
+        warnedNoBones = true
+        warn("OceanSystem: chunkTemplate has no Bone instances; surface will not deform")
+    end
+    return bones, offsets
+end
+
+local function updateBones(c: ResolvedConfig, dt: number)
+    elapsed += dt * c.waveSpeed
+    for _, chunk in pairs(activeChunks) do
+        local origin = chunk.part.Position
+        for i, bone in ipairs(chunk.bones) do
+            local offset = chunk.offsets[i]
+            local worldX = origin.X + offset.X
+            local worldZ = origin.Z + offset.Z
+            local y = waveHeight(worldX, worldZ, elapsed, c)
+            bone.Transform = CFrame.new(0, y, 0)
+        end
+    end
+end
+
 return OceanSystem
