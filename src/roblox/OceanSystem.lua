@@ -1,9 +1,9 @@
 --!strict
 --[[
-    OceanSystem — camera-following tiling ocean grid for Roblox.
-    Clones a MeshPart into an NxN grid that tracks the camera.
-    Per-chunk Y displacement via compound sine waves (Wind Waker style).
-    Texture scrolling is driven by Heartbeat.
+    OceanSystem — camera-following tiling ocean with bone-driven sine waves.
+    Clones a rigged MeshPart (4×4 bone grid) into an NxN grid that tracks
+    the camera. Each bone's Y is set per-frame via deterministic waveHeight()
+    evaluated at its world position. Seamless tiling by construction.
 
     Usage:
         local Ocean = require(path.to.OceanSystem)
@@ -56,6 +56,12 @@ type ResolvedConfig = {
     waveSpeed: number,
 }
 
+type ChunkData = {
+    part: MeshPart,
+    bones: { Bone },
+    offsets: { Vector3 },
+}
+
 local OceanSystem = {}
 
 local DEFAULT_WAVES: { WaveParams } = {
@@ -67,13 +73,14 @@ local DEFAULT_WAVES: { WaveParams } = {
 
 -- Module state
 local running: boolean = false
-local activeChunks: { [string]: MeshPart } = {}
-local chunkPool: { MeshPart } = {}
+local activeChunks: { [string]: ChunkData } = {}
+local chunkPool: { ChunkData } = {}
 local heartbeatConn: RBXScriptConnection? = nil
 local container: Folder? = nil
 local scrollU: number = 0
 local scrollV: number = 0
 local elapsed: number = 0
+local warnedNoBones: boolean = false
 
 local function chunkKey(cx: number, cz: number): string
     return cx .. "," .. cz
@@ -100,161 +107,6 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
         waves       = raw.waves or DEFAULT_WAVES,
         waveSpeed   = raw.waveSpeed or 1.0,
     }
-end
-
-local function createChunk(c: ResolvedConfig): MeshPart
-    local part = c.chunkTemplate:Clone()
-    part.Anchored = true
-    part.CanCollide = false
-    part.CastShadow = false
-
-    if c.textureId then
-        local tex = Instance.new("Texture")
-        tex.Texture = c.textureId
-        tex.Face = Enum.NormalId.Top
-        tex.StudsPerTileU = c.studsPerTile
-        tex.StudsPerTileV = c.studsPerTile
-        tex.Parent = part
-    end
-
-    return part
-end
-
-local function acquireChunk(c: ResolvedConfig): MeshPart
-    if #chunkPool > 0 then
-        return table.remove(chunkPool) :: MeshPart
-    end
-    return createChunk(c)
-end
-
-local function releaseChunk(chunk: MeshPart)
-    chunk.Parent = nil
-    table.insert(chunkPool, chunk)
-end
-
-local function updateGrid(c: ResolvedConfig)
-    local cam = Workspace.CurrentCamera
-    if not cam then
-        return
-    end
-
-    local pos = cam.CFrame.Position
-    local cx = math.floor(pos.X / c.chunkSize)
-    local cz = math.floor(pos.Z / c.chunkSize)
-    local r = c.gridRadius
-
-    -- Build set of cells that should exist
-    local needed: { [string]: { number } } = {}
-    for dx = -r, r do
-        for dz = -r, r do
-            needed[chunkKey(cx + dx, cz + dz)] = { cx + dx, cz + dz }
-        end
-    end
-
-    -- Despawn chunks that left the grid
-    for key, chunk in pairs(activeChunks) do
-        if not needed[key] then
-            releaseChunk(chunk)
-            activeChunks[key] = nil
-        end
-    end
-
-    -- Spawn chunks for newly visible cells
-    for key, cell in pairs(needed) do
-        if not activeChunks[key] then
-            local chunk = acquireChunk(c)
-            chunk.Position = Vector3.new(
-                cell[1] * c.chunkSize,
-                c.baseHeight,
-                cell[2] * c.chunkSize
-            )
-            chunk.Parent = container
-            activeChunks[key] = chunk
-        end
-    end
-end
-
-local function waveHeight(x: number, z: number, time: number, c: ResolvedConfig): number
-    local y = 0
-    for _, wave in ipairs(c.waves) do
-        y += wave.amplitude * math.sin(
-            wave.frequencyX * x + wave.frequencyZ * z + wave.phase + wave.speed * time
-        )
-    end
-    return y / #c.waves
-end
-
-local function updateWaves(c: ResolvedConfig, dt: number)
-    elapsed += dt * c.waveSpeed
-    for _, chunk in pairs(activeChunks) do
-        local pos = chunk.Position
-        local y = waveHeight(pos.X, pos.Z, elapsed, c)
-        chunk.Position = Vector3.new(pos.X, c.baseHeight + y, pos.Z)
-    end
-end
-
-local function updateTextures(c: ResolvedConfig, dt: number)
-    scrollU += c.scrollSpeed.X * dt
-    scrollV += c.scrollSpeed.Y * dt
-
-    for _, chunk in pairs(activeChunks) do
-        local tex = chunk:FindFirstChildOfClass("Texture")
-        if tex then
-            tex.OffsetStudsU = scrollU
-            tex.OffsetStudsV = scrollV
-        end
-    end
-end
-
-function OceanSystem.start(rawConfig: OceanConfig)
-    if running then
-        OceanSystem.stop()
-    end
-
-    local c = resolveConfig(rawConfig)
-    running = true
-    scrollU = 0
-    scrollV = 0
-    elapsed = 0
-
-    container = Instance.new("Folder")
-    container.Name = "OceanChunks"
-    container.Parent = Workspace
-
-    updateGrid(c)
-
-    heartbeatConn = RunService.Heartbeat:Connect(function(dt: number)
-        updateGrid(c)
-        updateWaves(c, dt)
-        updateTextures(c, dt)
-    end)
-end
-
-function OceanSystem.stop()
-    if heartbeatConn then
-        heartbeatConn:Disconnect()
-        heartbeatConn = nil
-    end
-
-    for _, chunk in pairs(activeChunks) do
-        chunk:Destroy()
-    end
-    table.clear(activeChunks)
-
-    for _, chunk in ipairs(chunkPool) do
-        chunk:Destroy()
-    end
-    table.clear(chunkPool)
-
-    if container then
-        container:Destroy()
-        container = nil
-    end
-
-    running = false
-    scrollU = 0
-    scrollV = 0
-    elapsed = 0
 end
 
 return OceanSystem
