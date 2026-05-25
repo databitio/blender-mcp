@@ -174,6 +174,25 @@ local function updateGrid(c: ResolvedConfig)
     end
 end
 
+local function waveHeight(x: number, z: number, time: number, c: ResolvedConfig): number
+    local y = 0
+    for _, wave in ipairs(c.waves) do
+        y += wave.amplitude * math.sin(
+            wave.frequencyX * x + wave.frequencyZ * z + wave.phase + wave.speed * time
+        )
+    end
+    return y / #c.waves
+end
+
+local function updateWaves(c: ResolvedConfig, dt: number)
+    elapsed += dt * c.waveSpeed
+    for _, chunk in pairs(activeChunks) do
+        local pos = chunk.Position
+        local y = waveHeight(pos.X, pos.Z, elapsed, c)
+        chunk.Position = Vector3.new(pos.X, c.baseHeight + y, pos.Z)
+    end
+end
+
 local function updateTextures(c: ResolvedConfig, dt: number)
     scrollU += c.scrollSpeed.X * dt
     scrollV += c.scrollSpeed.Y * dt
