@@ -58,6 +58,13 @@ type ResolvedConfig = {
 
 local OceanSystem = {}
 
+local DEFAULT_WAVES: { WaveParams } = {
+    { amplitude = 1.0, frequencyX = 1.0, frequencyZ = 0.0, phase = 0,    speed = 1.0 },
+    { amplitude = 0.8, frequencyX = 2.2, frequencyZ = 0.5, phase = 5.52, speed = 1.3 },
+    { amplitude = 0.6, frequencyX = 0.5, frequencyZ = 2.9, phase = 0.93, speed = 0.8 },
+    { amplitude = 0.4, frequencyX = 1.8, frequencyZ = 4.6, phase = 8.94, speed = 1.6 },
+}
+
 -- Module state
 local running: boolean = false
 local activeChunks: { [string]: MeshPart } = {}
@@ -66,6 +73,7 @@ local heartbeatConn: RBXScriptConnection? = nil
 local container: Folder? = nil
 local scrollU: number = 0
 local scrollV: number = 0
+local elapsed: number = 0
 
 local function chunkKey(cx: number, cz: number): string
     return cx .. "," .. cz
@@ -82,14 +90,15 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 
     return {
         chunkTemplate = template,
-        animationId = raw.animationId,
         textureId   = raw.textureId,
         gridRadius  = raw.gridRadius or 2,
         chunkSize   = raw.chunkSize or 64,
         studsPerTile = raw.studsPerTile or 16,
         scrollSpeed = raw.scrollSpeed or Vector2.new(2, 1),
-        waveHeight  = raw.waveHeight or -10,
+        baseHeight  = raw.baseHeight or -10,
         foamEdges   = if raw.foamEdges ~= nil then raw.foamEdges else false,
+        waves       = raw.waves or DEFAULT_WAVES,
+        waveSpeed   = raw.waveSpeed or 1.0,
     }
 end
 
