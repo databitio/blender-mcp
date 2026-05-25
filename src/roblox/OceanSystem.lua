@@ -165,7 +165,7 @@ local function updateGrid(c: ResolvedConfig)
             local chunk = acquireChunk(c)
             chunk.Position = Vector3.new(
                 cell[1] * c.chunkSize,
-                c.waveHeight,
+                c.baseHeight,
                 cell[2] * c.chunkSize
             )
             chunk.Parent = container
@@ -215,6 +215,7 @@ function OceanSystem.start(rawConfig: OceanConfig)
     running = true
     scrollU = 0
     scrollV = 0
+    elapsed = 0
 
     container = Instance.new("Folder")
     container.Name = "OceanChunks"
@@ -224,6 +225,7 @@ function OceanSystem.start(rawConfig: OceanConfig)
 
     heartbeatConn = RunService.Heartbeat:Connect(function(dt: number)
         updateGrid(c)
+        updateWaves(c, dt)
         updateTextures(c, dt)
     end)
 end
@@ -252,6 +254,7 @@ function OceanSystem.stop()
     running = false
     scrollU = 0
     scrollV = 0
+    elapsed = 0
 end
 
 return OceanSystem
