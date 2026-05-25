@@ -1,19 +1,20 @@
 --!strict
 --[[
     OceanSystem — camera-following tiling ocean grid for Roblox.
-    Clones a bone-animated MeshPart into an NxN grid that tracks the camera.
+    Clones a MeshPart into an NxN grid that tracks the camera.
+    Per-chunk Y displacement via compound sine waves (Wind Waker style).
     Texture scrolling is driven by Heartbeat.
 
     Usage:
         local Ocean = require(path.to.OceanSystem)
         Ocean.start({
-            chunkMeshId  = "rbxassetid://XXXXX",
-            textureId    = "rbxassetid://XXXXX",
-            gridRadius   = 2,
-            chunkSize    = 64,
-            studsPerTile = 16,
-            scrollSpeed  = Vector2.new(2, 1),
-            waveHeight   = -10,
+            chunkTemplate = game.ReplicatedStorage.OceanChunk,
+            textureId     = "rbxassetid://XXXXX",
+            gridRadius    = 2,
+            chunkSize     = 64,
+            studsPerTile  = 16,
+            scrollSpeed   = Vector2.new(2, 1),
+            baseHeight    = -10,
         })
         Ocean.stop()
 ]]
@@ -21,26 +22,38 @@
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
+export type WaveParams = {
+    amplitude: number,
+    frequencyX: number,
+    frequencyZ: number,
+    phase: number,
+    speed: number,
+}
+
 export type OceanConfig = {
-    chunkMeshId: string,
-    textureId: string,
+    chunkTemplate: Instance,
+    textureId: string?,
     gridRadius: number?,
     chunkSize: number?,
     studsPerTile: number?,
     scrollSpeed: Vector2?,
-    waveHeight: number?,
+    baseHeight: number?,
     foamEdges: boolean?,
+    waves: { WaveParams }?,
+    waveSpeed: number?,
 }
 
 type ResolvedConfig = {
-    chunkMeshId: string,
-    textureId: string,
+    chunkTemplate: MeshPart,
+    textureId: string?,
     gridRadius: number,
     chunkSize: number,
     studsPerTile: number,
     scrollSpeed: Vector2,
-    waveHeight: number,
+    baseHeight: number,
     foamEdges: boolean,
+    waves: { WaveParams },
+    waveSpeed: number,
 }
 
 local OceanSystem = {}
@@ -59,13 +72,17 @@ local function chunkKey(cx: number, cz: number): string
 end
 
 local function resolveConfig(raw: OceanConfig): ResolvedConfig
-    assert(type(raw.chunkMeshId) == "string" and raw.chunkMeshId ~= "",
-        "OceanSystem: chunkMeshId is required")
-    assert(type(raw.textureId) == "string" and raw.textureId ~= "",
-        "OceanSystem: textureId is required")
+    assert(typeof(raw.chunkTemplate) == "Instance",
+        "OceanSystem: chunkTemplate is required")
+
+    local template = if raw.chunkTemplate:IsA("MeshPart")
+        then raw.chunkTemplate
+        else raw.chunkTemplate:FindFirstChildWhichIsA("MeshPart", true)
+    assert(template, "OceanSystem: chunkTemplate must be or contain a MeshPart")
 
     return {
-        chunkMeshId = raw.chunkMeshId,
+        chunkTemplate = template,
+        animationId = raw.animationId,
         textureId   = raw.textureId,
         gridRadius  = raw.gridRadius or 2,
         chunkSize   = raw.chunkSize or 64,
@@ -76,19 +93,43 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
     }
 end
 
+local function playAnimation(part: MeshPart, animId: string)
+    local ctrl = part:FindFirstChildOfClass("AnimationController")
+    if not ctrl then
+        ctrl = Instance.new("AnimationController")
+        ctrl.Parent = part
+    end
+    local animator = ctrl:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = ctrl
+    end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = animId
+    local track = animator:LoadAnimation(anim)
+    track.Looped = true
+    track.Priority = Enum.AnimationPriority.Core
+    track:Play()
+end
+
 local function createChunk(c: ResolvedConfig): MeshPart
-    local part = Instance.new("MeshPart")
-    part.MeshId = c.chunkMeshId
+    local part = c.chunkTemplate:Clone()
     part.Anchored = true
     part.CanCollide = false
     part.CastShadow = false
 
-    local tex = Instance.new("Texture")
-    tex.Texture = c.textureId
-    tex.Face = Enum.NormalId.Top
-    tex.StudsPerTileU = c.studsPerTile
-    tex.StudsPerTileV = c.studsPerTile
-    tex.Parent = part
+    if c.textureId then
+        local tex = Instance.new("Texture")
+        tex.Texture = c.textureId
+        tex.Face = Enum.NormalId.Top
+        tex.StudsPerTileU = c.studsPerTile
+        tex.StudsPerTileV = c.studsPerTile
+        tex.Parent = part
+    end
+
+    if c.animationId then
+        playAnimation(part, c.animationId)
+    end
 
     return part
 end
