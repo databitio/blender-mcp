@@ -235,4 +235,56 @@ local function updateTextures(c: ResolvedConfig, dt: number)
     end
 end
 
+function OceanSystem.start(rawConfig: OceanConfig)
+    if running then
+        OceanSystem.stop()
+    end
+
+    local c = resolveConfig(rawConfig)
+    running = true
+    scrollU = 0
+    scrollV = 0
+    elapsed = 0
+    warnedNoBones = false
+
+    container = Instance.new("Folder")
+    container.Name = "OceanChunks"
+    container.Parent = Workspace
+
+    updateGrid(c)
+
+    heartbeatConn = RunService.Heartbeat:Connect(function(dt: number)
+        updateGrid(c)
+        updateBones(c, dt)
+        updateTextures(c, dt)
+    end)
+end
+
+function OceanSystem.stop()
+    if heartbeatConn then
+        heartbeatConn:Disconnect()
+        heartbeatConn = nil
+    end
+
+    for _, chunk in pairs(activeChunks) do
+        chunk.part:Destroy()
+    end
+    table.clear(activeChunks)
+
+    for _, chunk in ipairs(chunkPool) do
+        chunk.part:Destroy()
+    end
+    table.clear(chunkPool)
+
+    if container then
+        container:Destroy()
+        container = nil
+    end
+
+    running = false
+    scrollU = 0
+    scrollV = 0
+    elapsed = 0
+end
+
 return OceanSystem
