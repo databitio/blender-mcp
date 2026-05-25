@@ -216,7 +216,6 @@ class BlenderMCPServer:
             "create_ocean_mesh_4x4": self.create_ocean_mesh_4x4,
             "create_ocean_rig_4x4": self.create_ocean_rig_4x4,
             "bind_ocean_rig_4x4": self.bind_ocean_rig_4x4,
-            "animate_ocean_waves_4x4": self.animate_ocean_waves_4x4,
             "export_ocean_fbx_4x4": self.export_ocean_fbx_4x4,
         }
 
@@ -2430,87 +2429,6 @@ class BlenderMCPServer:
             "armature": arm_obj.name,
             "vertex_groups": groups,
             "group_count": len(groups),
-        }
-
-    def animate_ocean_waves_4x4(self, frame_count=72, amplitude=1.5, fps=30):
-        """Create looping sine-wave animation with 9-master edge-mirrored keyframes for 4x4 rig."""
-        import math
-
-        arm_obj = bpy.data.objects.get("OceanRig4x4")
-        if not arm_obj:
-            return {"error": "OceanRig4x4 not found"}
-
-        scene = bpy.context.scene
-        scene.render.fps = fps
-        scene.frame_start = 0
-        scene.frame_end = frame_count - 1
-
-        action_name = "OceanWaveAction4x4"
-        if action_name in bpy.data.actions:
-            bpy.data.actions.remove(bpy.data.actions[action_name])
-        action = bpy.data.actions.new(name=action_name)
-
-        if not arm_obj.animation_data:
-            arm_obj.animation_data_create()
-        arm_obj.animation_data.action = action
-
-        masters = {
-            "Wave4x4_R1_C1": {"phase": 0.0,                "amp": amplitude},
-            "Wave4x4_R2_C1": {"phase": math.pi / 4,        "amp": amplitude * 0.95},
-            "Wave4x4_R1_C2": {"phase": math.pi / 2,        "amp": amplitude * 0.9},
-            "Wave4x4_R2_C2": {"phase": 3 * math.pi / 4,    "amp": amplitude * 0.85},
-            "Wave4x4_R0_C1": {"phase": math.pi / 3,        "amp": amplitude * 0.7},
-            "Wave4x4_R0_C2": {"phase": 2 * math.pi / 3,    "amp": amplitude * 0.65},
-            "Wave4x4_R1_C0": {"phase": 5 * math.pi / 6,    "amp": amplitude * 0.6},
-            "Wave4x4_R2_C0": {"phase": 7 * math.pi / 6,    "amp": amplitude * 0.55},
-            "Wave4x4_R0_C0": {"phase": math.pi,             "amp": amplitude * 0.5},
-        }
-        mirrors = {
-            "Wave4x4_R3_C1": "Wave4x4_R0_C1",
-            "Wave4x4_R3_C2": "Wave4x4_R0_C2",
-            "Wave4x4_R1_C3": "Wave4x4_R1_C0",
-            "Wave4x4_R2_C3": "Wave4x4_R2_C0",
-            "Wave4x4_R0_C3": "Wave4x4_R0_C0",
-            "Wave4x4_R3_C0": "Wave4x4_R0_C0",
-            "Wave4x4_R3_C3": "Wave4x4_R0_C0",
-        }
-
-        bpy.context.view_layer.objects.active = arm_obj
-        bpy.ops.object.mode_set(mode='POSE')
-
-        def keyframe_bone(name, phase, amp):
-            bone = arm_obj.pose.bones.get(name)
-            if not bone:
-                return
-            for f in range(frame_count + 1):
-                t = f / frame_count * 2 * math.pi
-                bone.location.y = amp * math.sin(t + phase)
-                bone.keyframe_insert(data_path="location", frame=f, index=1)
-
-        for name, p in masters.items():
-            keyframe_bone(name, p["phase"], p["amp"])
-        for mirror_name, master_name in mirrors.items():
-            p = masters[master_name]
-            keyframe_bone(mirror_name, p["phase"], p["amp"])
-
-        if hasattr(action, 'fcurves'):
-            fcurves = action.fcurves
-        else:
-            fcurves = action.layers[0].strips[0].channelbags[0].fcurves
-        for fc in fcurves:
-            for kf in fc.keyframe_points:
-                kf.interpolation = 'BEZIER'
-
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-        return {
-            "action": action_name,
-            "frame_count": frame_count,
-            "fps": fps,
-            "duration_seconds": round(frame_count / fps, 2),
-            "amplitude": amplitude,
-            "master_bones": list(masters.keys()),
-            "mirrored_bones": list(mirrors.keys()),
         }
 
     def export_ocean_fbx_4x4(self, filepath=""):
