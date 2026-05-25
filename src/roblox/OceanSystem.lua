@@ -102,25 +102,6 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
     }
 end
 
-local function playAnimation(part: MeshPart, animId: string)
-    local ctrl = part:FindFirstChildOfClass("AnimationController")
-    if not ctrl then
-        ctrl = Instance.new("AnimationController")
-        ctrl.Parent = part
-    end
-    local animator = ctrl:FindFirstChildOfClass("Animator")
-    if not animator then
-        animator = Instance.new("Animator")
-        animator.Parent = ctrl
-    end
-    local anim = Instance.new("Animation")
-    anim.AnimationId = animId
-    local track = animator:LoadAnimation(anim)
-    track.Looped = true
-    track.Priority = Enum.AnimationPriority.Core
-    track:Play()
-end
-
 local function createChunk(c: ResolvedConfig): MeshPart
     local part = c.chunkTemplate:Clone()
     part.Anchored = true
@@ -134,10 +115,6 @@ local function createChunk(c: ResolvedConfig): MeshPart
         tex.StudsPerTileU = c.studsPerTile
         tex.StudsPerTileV = c.studsPerTile
         tex.Parent = part
-    end
-
-    if c.animationId then
-        playAnimation(part, c.animationId)
     end
 
     return part
