@@ -2432,7 +2432,7 @@ class BlenderMCPServer:
         }
 
     def export_ocean_fbx_4x4(self, filepath=""):
-        """Export 4x4 ocean chunk + rig as FBX with Roblox-compatible axis and baked animation."""
+        """Export 4x4 ocean chunk + rig as FBX with Roblox-compatible axis (no animation)."""
         mesh_obj = bpy.data.objects.get("OceanChunk4x4")
         arm_obj = bpy.data.objects.get("OceanRig4x4")
         if not mesh_obj:
@@ -2459,9 +2459,7 @@ class BlenderMCPServer:
             object_types={'MESH', 'ARMATURE'},
             use_mesh_modifiers=True,
             add_leaf_bones=False,
-            bake_anim=True,
-            bake_anim_use_all_bones=True,
-            bake_anim_simplify_factor=0.0,
+            bake_anim=False,
             axis_forward='-Z',
             axis_up='Y',
             path_mode='AUTO',
@@ -2475,7 +2473,7 @@ class BlenderMCPServer:
                 "axis_forward": "-Z",
                 "axis_up": "Y",
                 "add_leaf_bones": False,
-                "bake_anim_simplify_factor": 0.0,
+                "bake_anim": False,
             },
         }
 
