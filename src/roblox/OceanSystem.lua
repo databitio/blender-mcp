@@ -41,8 +41,10 @@ export type WaveParams = {
 
 export type OceanConfig = {
 	chunkTemplate: Instance,
+	farChunkTemplate: Instance?,
 	textureId: string?,
 	gridRadius: number?,
+	nearRadius: number?,
 	chunkSize: number?,
 	studsPerTile: number?,
 	scrollSpeed: Vector2?,
@@ -54,8 +56,10 @@ export type OceanConfig = {
 
 type ResolvedConfig = {
 	chunkTemplate: MeshPart,
+	farChunkTemplate: MeshPart?,
 	textureId: string?,
 	gridRadius: number,
+	nearRadius: number,
 	chunkSize: number,
 	studsPerTile: number,
 	scrollSpeed: Vector2,
@@ -70,6 +74,7 @@ type ChunkData = {
 	bones: { Bone },
 	offsets: { Vector3 },
 	tex: Texture?,
+	tier: "near" | "far",
 }
 
 local OceanSystem = {}
@@ -85,7 +90,8 @@ local DEFAULT_WAVES: { WaveParams } = {
 local running: boolean = false
 local activeConfig: ResolvedConfig? = nil
 local activeChunks: { [string]: ChunkData } = {}
-local chunkPool: { ChunkData } = {}
+local nearPool: { ChunkData } = {}
+local farPool: { ChunkData } = {}
 local heartbeatConn: RBXScriptConnection? = nil
 local container: Folder? = nil
 local scrollU: number = 0
@@ -107,14 +113,23 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 		else raw.chunkTemplate:FindFirstChildWhichIsA("MeshPart", true)
 	assert(template, "OceanSystem: chunkTemplate must be or contain a MeshPart")
 
+	local farTemplate: MeshPart? = nil
+	if raw.farChunkTemplate then
+		farTemplate = if raw.farChunkTemplate:IsA("MeshPart")
+			then raw.farChunkTemplate :: MeshPart
+			else raw.farChunkTemplate:FindFirstChildWhichIsA("MeshPart", true) :: MeshPart?
+	end
+
 	local chunkSize = raw.chunkSize or template.Size.X
 	local desiredTile = raw.studsPerTile or 16
 	local tilesPerChunk = math.max(1, math.round(chunkSize / desiredTile))
 
 	return {
 		chunkTemplate = template,
+		farChunkTemplate = farTemplate,
 		textureId = raw.textureId,
 		gridRadius = raw.gridRadius or 2,
+		nearRadius = raw.nearRadius or 1,
 		chunkSize = chunkSize,
 		studsPerTile = chunkSize / tilesPerChunk,
 		scrollSpeed = raw.scrollSpeed or Vector2.new(2, 1),
@@ -167,8 +182,9 @@ local function updateBones(c: ResolvedConfig, dt: number)
 	end
 end
 
-local function createChunk(c: ResolvedConfig): ChunkData
-	local part = c.chunkTemplate:Clone()
+local function createChunk(c: ResolvedConfig, tier: "near" | "far"): ChunkData
+	local template = if tier == "far" and c.farChunkTemplate then c.farChunkTemplate else c.chunkTemplate
+	local part = template:Clone()
 	part.Anchored = true
 	part.CanCollide = false
 	part.CastShadow = false
@@ -185,14 +201,15 @@ local function createChunk(c: ResolvedConfig): ChunkData
 	end
 
 	local bones, offsets = cacheBones(part)
-	return { part = part, bones = bones, offsets = offsets, tex = tex }
+	return { part = part, bones = bones, offsets = offsets, tex = tex, tier = tier }
 end
 
-local function acquireChunk(c: ResolvedConfig): ChunkData
-	if #chunkPool > 0 then
-		return table.remove(chunkPool) :: ChunkData
+local function acquireChunk(c: ResolvedConfig, tier: "near" | "far"): ChunkData
+	local pool = if tier == "near" then nearPool else farPool
+	if #pool > 0 then
+		return table.remove(pool) :: ChunkData
 	end
-	return createChunk(c)
+	return createChunk(c, tier)
 end
 
 local function releaseChunk(chunk: ChunkData)
@@ -200,7 +217,8 @@ local function releaseChunk(chunk: ChunkData)
 		bone.Transform = CFrame.identity
 	end
 	chunk.part.Parent = nil
-	table.insert(chunkPool, chunk)
+	local pool = if chunk.tier == "near" then nearPool else farPool
+	table.insert(pool, chunk)
 end
 
 local function updateGrid(c: ResolvedConfig)
@@ -220,11 +238,14 @@ local function updateGrid(c: ResolvedConfig)
 	lastCZ = cz
 
 	local r = c.gridRadius
+	local nr = c.nearRadius
+	local hasFar = c.farChunkTemplate ~= nil
 
-	local needed: { [string]: { number } } = {}
+	local needed: { [string]: { any } } = {}
 	for dx = -r, r do
 		for dz = -r, r do
-			needed[chunkKey(cx + dx, cz + dz)] = { cx + dx, cz + dz }
+			local tier: "near" | "far" = if hasFar and math.max(math.abs(dx), math.abs(dz)) > nr then "far" else "near"
+			needed[chunkKey(cx + dx, cz + dz)] = { cx + dx, cz + dz, tier }
 		end
 	end
 
@@ -236,8 +257,15 @@ local function updateGrid(c: ResolvedConfig)
 	end
 
 	for key, cell in pairs(needed) do
+		local tier: "near" | "far" = cell[3]
+		local existing = activeChunks[key]
+		if existing and existing.tier ~= tier then
+			releaseChunk(existing)
+			activeChunks[key] = nil
+			existing = nil
+		end
 		if not activeChunks[key] then
-			local chunk = acquireChunk(c)
+			local chunk = acquireChunk(c, tier)
 			chunk.part.Position = Vector3.new(cell[1] * c.chunkSize, c.baseHeight, cell[2] * c.chunkSize)
 			chunk.part.Parent = container
 			activeChunks[key] = chunk
@@ -297,10 +325,15 @@ function OceanSystem.stop()
 	end
 	table.clear(activeChunks)
 
-	for _, chunk in ipairs(chunkPool) do
+	for _, chunk in ipairs(nearPool) do
 		chunk.part:Destroy()
 	end
-	table.clear(chunkPool)
+	table.clear(nearPool)
+
+	for _, chunk in ipairs(farPool) do
+		chunk.part:Destroy()
+	end
+	table.clear(farPool)
 
 	if container then
 		container:Destroy()
