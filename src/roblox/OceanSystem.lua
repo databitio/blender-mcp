@@ -98,7 +98,7 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 		chunkTemplate = template,
 		textureId = raw.textureId,
 		gridRadius = raw.gridRadius or 2,
-		chunkSize = raw.chunkSize or 64,
+		chunkSize = template.Size.X,
 		studsPerTile = raw.studsPerTile or 16,
 		scrollSpeed = raw.scrollSpeed or Vector2.new(2, 1),
 		baseHeight = raw.baseHeight or -10,
