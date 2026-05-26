@@ -1086,6 +1086,133 @@ def import_generated_asset_hunyuan(
         return f"Error generating Hunyuan3D task: {str(e)}"
 
 
+@telemetry_tool("create_ocean_mesh")
+@mcp.tool()
+def create_ocean_mesh(ctx: Context, chunk_size: int = 512, grid_size: int = 5, depth: int = 64) -> str:
+    """
+    Create an ocean chunk box mesh: subdivided top surface with simple side
+    walls and a flat bottom.  The addon derives subdivision count from
+    grid_size automatically.
+
+    Parameters:
+    - chunk_size: Size in Blender units, maps 1:1 to Roblox studs (default 512)
+    - grid_size: Bone grid dimensions (e.g. 5 = 5x5, 3 = 3x3). Default 5.
+    - depth: Height of the box below the surface in Blender units (default 64).
+             Set to 0 for a flat plane (legacy behavior).
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("create_ocean_mesh", {
+            "chunk_size": chunk_size,
+            "grid_size": grid_size,
+            "depth": depth,
+        })
+        if "error" in result:
+            return f"Error: {result['error']}"
+        return (
+            f"Ocean mesh '{result['name']}' created ({grid_size}x{grid_size} variant).\n"
+            f"Vertices: {result['vertices']}, Faces: {result['faces']}, "
+            f"Triangles: {result['triangles']}\n"
+            f"Size: {result['chunk_size']}x{result['chunk_size']}, "
+            f"Depth: {result['depth']}, "
+            f"Subdivisions: {result['subdivisions']}x{result['subdivisions']}\n"
+            f"UVs: planar 0-1, Shading: flat"
+        )
+    except Exception as e:
+        logger.error(f"Error creating ocean mesh {grid_size}x{grid_size}: {str(e)}")
+        return f"Error creating ocean mesh {grid_size}x{grid_size}: {str(e)}"
+
+
+@telemetry_tool("create_ocean_rig")
+@mcp.tool()
+def create_ocean_rig(ctx: Context, chunk_size: int = 512, grid_size: int = 5) -> str:
+    """
+    Create a bone grid armature for the ocean chunk. Bones are named
+    Wave{N}x{N}_R{row}_C{col} and placed edge-to-edge across the plane for
+    seamless tiling. Requires the matching OceanChunk mesh to exist.
+
+    Parameters:
+    - chunk_size: Must match the chunk_size used in create_ocean_mesh (default 512)
+    - grid_size: Bone grid dimensions (e.g. 5 = 5x5, 3 = 3x3). Default 5.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("create_ocean_rig", {
+            "chunk_size": chunk_size,
+            "grid_size": grid_size,
+        })
+        if "error" in result:
+            return f"Error: {result['error']}"
+        return (
+            f"Ocean rig '{result['name']}' created with {result['bone_count']} bones ({grid_size}x{grid_size} variant).\n"
+            f"Bone spacing: {result['spacing']} units\n"
+            f"Bones: {', '.join(result['bones'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error creating ocean rig {grid_size}x{grid_size}: {str(e)}")
+        return f"Error creating ocean rig {grid_size}x{grid_size}: {str(e)}"
+
+
+@telemetry_tool("bind_ocean_rig")
+@mcp.tool()
+def bind_ocean_rig(ctx: Context, grid_size: int = 5) -> str:
+    """
+    Bind the ocean chunk mesh to its armature using automatic weights.
+    Each bone gets a vertex group influencing its local region of the mesh.
+    Requires both the OceanChunk and OceanRig for the given grid_size to exist.
+
+    Parameters:
+    - grid_size: Bone grid dimensions (e.g. 5 = 5x5, 3 = 3x3). Default 5.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("bind_ocean_rig", {
+            "grid_size": grid_size,
+        })
+        if "error" in result:
+            return f"Error: {result['error']}"
+        return (
+            f"Bound '{result['mesh']}' to '{result['armature']}' with automatic weights ({grid_size}x{grid_size} variant).\n"
+            f"Vertex groups ({result['group_count']}): {', '.join(result['vertex_groups'])}"
+        )
+    except Exception as e:
+        logger.error(f"Error binding ocean rig {grid_size}x{grid_size}: {str(e)}")
+        return f"Error binding ocean rig {grid_size}x{grid_size}: {str(e)}"
+
+
+@telemetry_tool("export_ocean_chunk")
+@mcp.tool()
+def export_ocean_chunk(ctx: Context, grid_size: int = 5, filepath: str = "") -> str:
+    """
+    Export the ocean chunk mesh and armature as FBX with Roblox-compatible
+    settings. Also saves a .blend checkpoint. Axis: -Z forward, Y up.
+
+    Parameters:
+    - grid_size: Bone grid dimensions (e.g. 5 = 5x5, 3 = 3x3). Default 5.
+    - filepath: Output FBX path (default: beside .blend file or temp directory)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("export_ocean_fbx", {
+            "grid_size": grid_size,
+            "filepath": filepath,
+        })
+        if "error" in result:
+            return f"Error: {result['error']}"
+        size_kb = round(result["fbx_size_bytes"] / 1024, 1)
+        return (
+            f"Exported ocean chunk ({grid_size}x{grid_size} variant):\n"
+            f"  FBX: {result['fbx_path']} ({size_kb} KB)\n"
+            f"  Blend: {result['blend_path']}\n"
+            f"  Axis: {result['settings']['axis_forward']} fwd, "
+            f"{result['settings']['axis_up']} up\n"
+            f"  Leaf bones: off, Animation: off"
+        )
+    except Exception as e:
+        logger.error(f"Error exporting ocean chunk {grid_size}x{grid_size}: {str(e)}")
+        return f"Error exporting ocean chunk {grid_size}x{grid_size}: {str(e)}"
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""
@@ -1175,6 +1302,48 @@ def asset_creation_strategy() -> str:
     - Hyper3D Rodin or Hunyuan3D failed to generate the desired asset
     - The task specifically requires a basic material/color
     """
+
+@mcp.prompt()
+def ocean_chunk_workflow() -> str:
+    """Step-by-step workflow for creating tiling ocean chunks in Blender"""
+    return """Ocean Chunk Authoring Workflow
+===================================
+
+Rigged meshes for use with OceanSystem.lua (bone-driven sine wave displacement).
+Follow these steps in order. Pause at each checkpoint for user review.
+
+PHASE 1 — SETUP
+  Call get_scene_info() to verify the MCP connection is live.
+
+PHASE 2 — NEAR TEMPLATE (5x5 bone grid)
+  Call create_ocean_mesh(chunk_size=512, grid_size=5).
+  Call create_ocean_rig(chunk_size=512, grid_size=5).
+  Call bind_ocean_rig(grid_size=5).
+  Call export_ocean_chunk(grid_size=5).
+  -> Take a viewport screenshot for the user to inspect.
+
+PHASE 3 — FAR TEMPLATE (3x3 bone grid)
+  Call create_ocean_mesh(chunk_size=512, grid_size=3).
+  Call create_ocean_rig(chunk_size=512, grid_size=3).
+  Call bind_ocean_rig(grid_size=3).
+  Call export_ocean_chunk(grid_size=3).
+  -> Take a viewport screenshot for the user to inspect.
+
+PHASE 4 — NEXT STEPS
+  Tell the user:
+  1. Import both FBX files into Roblox Studio
+  2. Publish both MeshParts to get rbxassetids
+  3. Use OceanSystem.lua with both templates:
+     Ocean.start({
+         chunkTemplate = game.ReplicatedStorage.OceanChunkNear,
+         farChunkTemplate = game.ReplicatedStorage.OceanChunkFar,
+         nearRadius = 1,
+         gridRadius = 3,
+     })
+  4. Bone displacement is driven by Lua at runtime (no animation asset needed)
+  5. Near chunks (5x5) give detailed waves close to camera
+  6. Far chunks (3x3) give smooth waves at distance with lower cost
+"""
 
 # Main execution
 

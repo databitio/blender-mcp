@@ -1,6 +1,7 @@
 # Code created by Siddharth Ahuja: www.github.com/ahujasid © 2025
 
 import re
+import bmesh
 import bpy
 import mathutils
 import json
@@ -213,6 +214,10 @@ class BlenderMCPServer:
             "get_hyper3d_status": self.get_hyper3d_status,
             "get_sketchfab_status": self.get_sketchfab_status,
             "get_hunyuan3d_status": self.get_hunyuan3d_status,
+            "create_ocean_mesh": self.create_ocean_mesh,
+            "create_ocean_rig": self.create_ocean_rig,
+            "bind_ocean_rig": self.bind_ocean_rig,
+            "export_ocean_fbx": self.export_ocean_fbx,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2319,6 +2324,266 @@ class BlenderMCPServer:
             except Exception as e:
                 print(f"Failed to clean up temporary directory {temp_dir}: {e}")
     #endregion
+
+    def create_ocean_mesh(self, chunk_size=512, grid_size=5, subdivisions=None, depth=64):
+        """Create ocean chunk box mesh: subdivided top surface with simple side
+        walls and a flat bottom.
+
+        Args:
+            chunk_size: Side length of the chunk in Blender units.
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+            subdivisions: Mesh subdivision count.  Defaults to
+                ``(grid_size - 1) * 2`` which gives 2 quads per bone
+                interval per axis.
+            depth: Height of the box extending below the surface (default 64).
+        """
+        if grid_size < 2:
+            return {"error": "grid_size must be >= 2"}
+        if subdivisions is None:
+            subdivisions = (grid_size - 1) * 2
+
+        obj_name = f"OceanChunk{grid_size}x{grid_size}"
+
+        existing = bpy.data.objects.get(obj_name)
+        if existing:
+            bpy.data.objects.remove(existing, do_unlink=True)
+
+        bpy.ops.mesh.primitive_plane_add(size=chunk_size, location=(0, 0, 0))
+        plane = bpy.context.active_object
+        plane.name = obj_name
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.subdivide(number_cuts=subdivisions - 1)
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        if depth > 0:
+            mesh = plane.data
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+
+            boundary_edges = set()
+            for e in bm.edges:
+                if len(e.link_faces) == 1:
+                    boundary_edges.add(e)
+
+            start_edge = next(iter(boundary_edges))
+            current_vert = start_edge.verts[0]
+            current_edge = start_edge
+            ordered_verts = [current_vert]
+            used_edges = {current_edge}
+
+            while True:
+                next_vert = current_edge.other_vert(current_vert)
+                next_edge = None
+                for e in next_vert.link_edges:
+                    if e in boundary_edges and e not in used_edges:
+                        next_edge = e
+                        break
+                if next_edge is None:
+                    break
+                ordered_verts.append(next_vert)
+                current_vert = next_vert
+                current_edge = next_edge
+                used_edges.add(next_edge)
+
+            bottom_verts = []
+            vert_map = {}
+            for v in ordered_verts:
+                bv = bm.verts.new((v.co.x, v.co.y, -depth))
+                bottom_verts.append(bv)
+                vert_map[v] = bv
+            bm.verts.ensure_lookup_table()
+
+            n = len(ordered_verts)
+            for i in range(n):
+                tv1 = ordered_verts[i]
+                tv2 = ordered_verts[(i + 1) % n]
+                bv1 = vert_map[tv1]
+                bv2 = vert_map[tv2]
+                bm.faces.new([tv1, bv1, bv2, tv2])
+
+            bm.faces.new(list(reversed(bottom_verts)))
+
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+            bm.to_mesh(mesh)
+            bm.free()
+            mesh.update()
+
+        mesh = plane.data
+        for poly in mesh.polygons:
+            poly.use_smooth = False
+
+        uv_layer = mesh.uv_layers.active or mesh.uv_layers.new(name="UVMap")
+        half = chunk_size / 2.0
+        for poly in mesh.polygons:
+            for li in poly.loop_indices:
+                v = mesh.vertices[mesh.loops[li].vertex_index]
+                uv_layer.data[li].uv = (
+                    (v.co.x + half) / chunk_size,
+                    (v.co.y + half) / chunk_size,
+                )
+
+        return {
+            "name": plane.name,
+            "vertices": len(mesh.vertices),
+            "faces": len(mesh.polygons),
+            "triangles": sum(len(p.vertices) - 2 for p in mesh.polygons),
+            "chunk_size": chunk_size,
+            "grid_size": grid_size,
+            "subdivisions": subdivisions,
+            "depth": depth,
+        }
+
+    def create_ocean_rig(self, chunk_size=512, grid_size=5):
+        """Create bone grid armature for ocean chunk wave deformation.
+
+        Args:
+            chunk_size: Side length of the chunk in Blender units.
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+        """
+        if grid_size < 2:
+            return {"error": "grid_size must be >= 2"}
+        chunk_name = f"OceanChunk{grid_size}x{grid_size}"
+        rig_name = f"OceanRig{grid_size}x{grid_size}"
+
+        mesh_obj = bpy.data.objects.get(chunk_name)
+        if not mesh_obj:
+            return {"error": f"{chunk_name} not found. Run create_ocean_mesh first."}
+
+        existing = bpy.data.objects.get(rig_name)
+        if existing:
+            bpy.data.objects.remove(existing, do_unlink=True)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.armature_add(location=(0, 0, 0))
+        arm_obj = bpy.context.active_object
+        arm_obj.name = rig_name
+        arm_obj.data.name = f"{rig_name}Data"
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        for b in list(arm_obj.data.edit_bones):
+            arm_obj.data.edit_bones.remove(b)
+
+        # grid_size bones span (grid_size-1) intervals edge-to-edge for seamless tiling.
+        half = chunk_size / 2.0
+        spacing = chunk_size / (grid_size - 1)
+        names = []
+        for row in range(grid_size):
+            for col in range(grid_size):
+                name = f"Wave{grid_size}x{grid_size}_R{row}_C{col}"
+                bone = arm_obj.data.edit_bones.new(name)
+                x = -half + col * spacing
+                y = -half + row * spacing
+                bone.head = (x, y, 0)
+                bone.tail = (x, y, 1)
+                names.append(name)
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {
+            "name": arm_obj.name,
+            "bone_count": len(names),
+            "bones": names,
+            "spacing": round(spacing, 4),
+        }
+
+    def bind_ocean_rig(self, grid_size=5):
+        """Parent ocean mesh to armature with automatic weights.
+
+        Args:
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+        """
+        chunk_name = f"OceanChunk{grid_size}x{grid_size}"
+        rig_name = f"OceanRig{grid_size}x{grid_size}"
+
+        mesh_obj = bpy.data.objects.get(chunk_name)
+        arm_obj = bpy.data.objects.get(rig_name)
+        if not mesh_obj:
+            return {"error": f"{chunk_name} not found"}
+        if not arm_obj:
+            return {"error": f"{rig_name} not found"}
+
+        if mesh_obj.parent:
+            mesh_obj.parent = None
+        for mod in list(mesh_obj.modifiers):
+            if mod.type == 'ARMATURE':
+                mesh_obj.modifiers.remove(mod)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        mesh_obj.select_set(True)
+        arm_obj.select_set(True)
+        bpy.context.view_layer.objects.active = arm_obj
+        bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+
+        for v in mesh_obj.data.vertices:
+            if v.co.z < -0.5:
+                for g in v.groups:
+                    g.weight = 0.0
+
+        groups = [g.name for g in mesh_obj.vertex_groups]
+        return {
+            "mesh": mesh_obj.name,
+            "armature": arm_obj.name,
+            "vertex_groups": groups,
+            "group_count": len(groups),
+        }
+
+    def export_ocean_fbx(self, grid_size=5, filepath=""):
+        """Export ocean chunk + rig as FBX with Roblox-compatible axis (no animation).
+
+        Args:
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+            filepath: Output path.  Defaults to ``OceanChunk{G}x{G}.fbx``.
+        """
+        chunk_name = f"OceanChunk{grid_size}x{grid_size}"
+        rig_name = f"OceanRig{grid_size}x{grid_size}"
+
+        mesh_obj = bpy.data.objects.get(chunk_name)
+        arm_obj = bpy.data.objects.get(rig_name)
+        if not mesh_obj:
+            return {"error": f"{chunk_name} not found"}
+        if not arm_obj:
+            return {"error": f"{rig_name} not found"}
+
+        if not filepath:
+            base = bpy.path.abspath("//") if bpy.data.filepath else tempfile.gettempdir()
+            filepath = os.path.join(base, f"{chunk_name}.fbx")
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+
+        blend_path = filepath.replace(".fbx", ".blend")
+        bpy.ops.wm.save_as_mainfile(filepath=blend_path, copy=True)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        mesh_obj.select_set(True)
+        arm_obj.select_set(True)
+        bpy.context.view_layer.objects.active = arm_obj
+
+        bpy.ops.export_scene.fbx(
+            filepath=filepath,
+            use_selection=True,
+            object_types={'MESH', 'ARMATURE'},
+            use_mesh_modifiers=True,
+            add_leaf_bones=False,
+            bake_anim=False,
+            axis_forward='-Z',
+            axis_up='Y',
+            path_mode='AUTO',
+        )
+
+        return {
+            "fbx_path": filepath,
+            "blend_path": blend_path,
+            "fbx_size_bytes": os.path.getsize(filepath),
+            "settings": {
+                "axis_forward": "-Z",
+                "axis_up": "Y",
+                "add_leaf_bones": False,
+                "bake_anim": False,
+            },
+        }
 
 # Blender Addon Preferences
 class BLENDERMCP_AddonPreferences(bpy.types.AddonPreferences):
