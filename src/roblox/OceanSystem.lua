@@ -1,20 +1,22 @@
 --!strict
 --[[
     OceanSystem — camera-following tiling ocean with bone-driven sine waves.
-    Clones a rigged MeshPart (4×4 bone grid) into an NxN grid that tracks
-    the camera. Each bone's Y is set per-frame via deterministic waveHeight()
-    evaluated at its world position. Seamless tiling by construction.
+    Clones rigged MeshPart templates into an NxN grid that tracks the camera.
+    Supports ring-based LOD: near chunks use a high-density bone grid, far
+    chunks use a lower-density grid. Both evaluate the same waveHeight()
+    function for seamless tiling at tier boundaries.
 
     Usage:
         local Ocean = require(path.to.OceanSystem)
         Ocean.start({
-            chunkTemplate = game.ReplicatedStorage.OceanChunk,
-            textureId     = "rbxassetid://XXXXX",
-            gridRadius    = 1,
-            chunkSize     = 512,
-            studsPerTile  = 128,
-            scrollSpeed   = Vector2.new(2, 1),
-            baseHeight    = -10,
+            chunkTemplate    = game.ReplicatedStorage.OceanChunkNear,  -- 5x5 bones
+            farChunkTemplate = game.ReplicatedStorage.OceanChunkFar,   -- 3x3 bones (optional)
+            nearRadius       = 1,
+            gridRadius       = 3,
+            chunkSize        = 512,
+            studsPerTile     = 128,
+            scrollSpeed      = Vector2.new(2, 1),
+            baseHeight       = -10,
         })
 
         -- Hot-swap waves based on player location:

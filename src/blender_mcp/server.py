@@ -1103,15 +1103,14 @@ def create_ocean_mesh(ctx: Context, chunk_size: int = 512, grid_size: int = 5) -
             "chunk_size": chunk_size,
             "grid_size": grid_size,
         })
-        if "error" in result.get("result", {}):
-            return f"Error: {result['result']['error']}"
-        r = result.get("result", {})
+        if "error" in result:
+            return f"Error: {result['error']}"
         return (
-            f"Ocean mesh '{r['name']}' created ({grid_size}x{grid_size} variant).\n"
-            f"Vertices: {r['vertices']}, Faces: {r['faces']}, "
-            f"Triangles: {r['triangles']}\n"
-            f"Size: {r['chunk_size']}x{r['chunk_size']}, "
-            f"Subdivisions: {r['subdivisions']}x{r['subdivisions']}\n"
+            f"Ocean mesh '{result['name']}' created ({grid_size}x{grid_size} variant).\n"
+            f"Vertices: {result['vertices']}, Faces: {result['faces']}, "
+            f"Triangles: {result['triangles']}\n"
+            f"Size: {result['chunk_size']}x{result['chunk_size']}, "
+            f"Subdivisions: {result['subdivisions']}x{result['subdivisions']}\n"
             f"UVs: planar 0-1, Shading: flat"
         )
     except Exception as e:
@@ -1137,13 +1136,12 @@ def create_ocean_rig(ctx: Context, chunk_size: int = 512, grid_size: int = 5) ->
             "chunk_size": chunk_size,
             "grid_size": grid_size,
         })
-        if "error" in result.get("result", {}):
-            return f"Error: {result['result']['error']}"
-        r = result.get("result", {})
+        if "error" in result:
+            return f"Error: {result['error']}"
         return (
-            f"Ocean rig '{r['name']}' created with {r['bone_count']} bones ({grid_size}x{grid_size} variant).\n"
-            f"Bone spacing: {r['spacing']} units\n"
-            f"Bones: {', '.join(r['bones'])}"
+            f"Ocean rig '{result['name']}' created with {result['bone_count']} bones ({grid_size}x{grid_size} variant).\n"
+            f"Bone spacing: {result['spacing']} units\n"
+            f"Bones: {', '.join(result['bones'])}"
         )
     except Exception as e:
         logger.error(f"Error creating ocean rig {grid_size}x{grid_size}: {str(e)}")
@@ -1166,12 +1164,11 @@ def bind_ocean_rig(ctx: Context, grid_size: int = 5) -> str:
         result = blender.send_command("bind_ocean_rig", {
             "grid_size": grid_size,
         })
-        if "error" in result.get("result", {}):
-            return f"Error: {result['result']['error']}"
-        r = result.get("result", {})
+        if "error" in result:
+            return f"Error: {result['error']}"
         return (
-            f"Bound '{r['mesh']}' to '{r['armature']}' with automatic weights ({grid_size}x{grid_size} variant).\n"
-            f"Vertex groups ({r['group_count']}): {', '.join(r['vertex_groups'])}"
+            f"Bound '{result['mesh']}' to '{result['armature']}' with automatic weights ({grid_size}x{grid_size} variant).\n"
+            f"Vertex groups ({result['group_count']}): {', '.join(result['vertex_groups'])}"
         )
     except Exception as e:
         logger.error(f"Error binding ocean rig {grid_size}x{grid_size}: {str(e)}")
@@ -1195,16 +1192,15 @@ def export_ocean_chunk(ctx: Context, grid_size: int = 5, filepath: str = "") -> 
             "grid_size": grid_size,
             "filepath": filepath,
         })
-        if "error" in result.get("result", {}):
-            return f"Error: {result['result']['error']}"
-        r = result.get("result", {})
-        size_kb = round(r["fbx_size_bytes"] / 1024, 1)
+        if "error" in result:
+            return f"Error: {result['error']}"
+        size_kb = round(result["fbx_size_bytes"] / 1024, 1)
         return (
             f"Exported ocean chunk ({grid_size}x{grid_size} variant):\n"
-            f"  FBX: {r['fbx_path']} ({size_kb} KB)\n"
-            f"  Blend: {r['blend_path']}\n"
-            f"  Axis: {r['settings']['axis_forward']} fwd, "
-            f"{r['settings']['axis_up']} up\n"
+            f"  FBX: {result['fbx_path']} ({size_kb} KB)\n"
+            f"  Blend: {result['blend_path']}\n"
+            f"  Axis: {result['settings']['axis_forward']} fwd, "
+            f"{result['settings']['axis_up']} up\n"
             f"  Leaf bones: off, Animation: off"
         )
     except Exception as e:
