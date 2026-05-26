@@ -94,12 +94,16 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 		else raw.chunkTemplate:FindFirstChildWhichIsA("MeshPart", true)
 	assert(template, "OceanSystem: chunkTemplate must be or contain a MeshPart")
 
+	local chunkSize = template.Size.X
+	local desiredTile = raw.studsPerTile or 16
+	local tilesPerChunk = math.max(1, math.round(chunkSize / desiredTile))
+
 	return {
 		chunkTemplate = template,
 		textureId = raw.textureId,
 		gridRadius = raw.gridRadius or 2,
-		chunkSize = template.Size.X,
-		studsPerTile = raw.studsPerTile or 16,
+		chunkSize = chunkSize,
+		studsPerTile = chunkSize / tilesPerChunk,
 		scrollSpeed = raw.scrollSpeed or Vector2.new(2, 1),
 		baseHeight = raw.baseHeight or -10,
 		foamEdges = if raw.foamEdges ~= nil then raw.foamEdges else false,
@@ -226,8 +230,8 @@ local function updateTextures(c: ResolvedConfig, dt: number)
 	for _, chunk in pairs(activeChunks) do
 		local tex = chunk.part:FindFirstChildOfClass("Texture")
 		if tex then
-			tex.OffsetStudsU = scrollU
-			tex.OffsetStudsV = scrollV
+			tex.OffsetStudsU = scrollU + chunk.part.Position.X
+			tex.OffsetStudsV = scrollV + chunk.part.Position.Z
 		end
 	end
 end
