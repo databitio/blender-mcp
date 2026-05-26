@@ -16,6 +16,15 @@
             scrollSpeed   = Vector2.new(2, 1),
             baseHeight    = -10,
         })
+
+        -- Hot-swap waves based on player location:
+        Ocean.setWaves({
+            { amplitude = 1.0, frequencyX = 0.008, frequencyZ = 0.004, phase = 0, speed = 0.4 },
+        })
+
+        -- Or change multiple config fields at once:
+        Ocean.setConfig({ waveSpeed = 0.5, baseHeight = -15 })
+
         Ocean.stop()
 ]]
 
@@ -74,6 +83,7 @@ local DEFAULT_WAVES: { WaveParams } = {
 
 -- Module state
 local running: boolean = false
+local activeConfig: ResolvedConfig? = nil
 local activeChunks: { [string]: ChunkData } = {}
 local chunkPool: { ChunkData } = {}
 local heartbeatConn: RBXScriptConnection? = nil
@@ -254,6 +264,7 @@ function OceanSystem.start(rawConfig: OceanConfig)
 	end
 
 	local c = resolveConfig(rawConfig)
+	activeConfig = c
 	running = true
 	scrollU = 0
 	scrollV = 0
@@ -297,11 +308,44 @@ function OceanSystem.stop()
 	end
 
 	running = false
+	activeConfig = nil
 	scrollU = 0
 	scrollV = 0
 	elapsed = 0
 	lastCX = math.huge
 	lastCZ = math.huge
+end
+
+function OceanSystem.setWaves(waves: { WaveParams })
+	assert(running and activeConfig, "OceanSystem: must be running to call setWaves")
+	activeConfig.waves = waves
+end
+
+function OceanSystem.setConfig(overrides: {
+	waves: { WaveParams }?,
+	waveSpeed: number?,
+	scrollSpeed: Vector2?,
+	baseHeight: number?,
+})
+	assert(running and activeConfig, "OceanSystem: must be running to call setConfig")
+	local c = activeConfig
+
+	if overrides.waves then
+		c.waves = overrides.waves
+	end
+	if overrides.waveSpeed then
+		c.waveSpeed = overrides.waveSpeed
+	end
+	if overrides.scrollSpeed then
+		c.scrollSpeed = overrides.scrollSpeed
+	end
+	if overrides.baseHeight then
+		c.baseHeight = overrides.baseHeight
+		for _, chunk in pairs(activeChunks) do
+			local pos = chunk.part.Position
+			chunk.part.Position = Vector3.new(pos.X, c.baseHeight, pos.Z)
+		end
+	end
 end
 
 return OceanSystem
