@@ -213,10 +213,10 @@ class BlenderMCPServer:
             "get_hyper3d_status": self.get_hyper3d_status,
             "get_sketchfab_status": self.get_sketchfab_status,
             "get_hunyuan3d_status": self.get_hunyuan3d_status,
-            "create_ocean_mesh_5x5": self.create_ocean_mesh_5x5,
-            "create_ocean_rig_5x5": self.create_ocean_rig_5x5,
-            "bind_ocean_rig_5x5": self.bind_ocean_rig_5x5,
-            "export_ocean_fbx_5x5": self.export_ocean_fbx_5x5,
+            "create_ocean_mesh": self.create_ocean_mesh,
+            "create_ocean_rig": self.create_ocean_rig,
+            "bind_ocean_rig": self.bind_ocean_rig,
+            "export_ocean_fbx": self.export_ocean_fbx,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -2324,15 +2324,28 @@ class BlenderMCPServer:
                 print(f"Failed to clean up temporary directory {temp_dir}: {e}")
     #endregion
 
-    def create_ocean_mesh_5x5(self, chunk_size=512, subdivisions=16):
-        """Create subdivided plane with flat shading and planar UVs for 5x5 ocean chunk."""
-        existing = bpy.data.objects.get("OceanChunk5x5")
+    def create_ocean_mesh(self, chunk_size=512, grid_size=5, subdivisions=None):
+        """Create subdivided plane with flat shading and planar UVs for ocean chunk.
+
+        Args:
+            chunk_size: Side length of the plane in Blender units.
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+            subdivisions: Mesh subdivision count.  Defaults to
+                ``(grid_size - 1) * 2`` which gives 2 quads per bone
+                interval per axis.
+        """
+        if subdivisions is None:
+            subdivisions = (grid_size - 1) * 2
+
+        obj_name = f"OceanChunk{grid_size}x{grid_size}"
+
+        existing = bpy.data.objects.get(obj_name)
         if existing:
             bpy.data.objects.remove(existing, do_unlink=True)
 
         bpy.ops.mesh.primitive_plane_add(size=chunk_size, location=(0, 0, 0))
         plane = bpy.context.active_object
-        plane.name = "OceanChunk5x5"
+        plane.name = obj_name
 
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
@@ -2357,36 +2370,45 @@ class BlenderMCPServer:
             "faces": len(mesh.polygons),
             "triangles": len(mesh.polygons) * 2,
             "chunk_size": chunk_size,
+            "grid_size": grid_size,
             "subdivisions": subdivisions,
         }
 
-    def create_ocean_rig_5x5(self, chunk_size=512):
-        """Create 5x5 bone grid armature for ocean chunk wave deformation."""
-        mesh_obj = bpy.data.objects.get("OceanChunk5x5")
-        if not mesh_obj:
-            return {"error": "OceanChunk5x5 not found. Run create_ocean_mesh_5x5 first."}
+    def create_ocean_rig(self, chunk_size=512, grid_size=5):
+        """Create bone grid armature for ocean chunk wave deformation.
 
-        existing = bpy.data.objects.get("OceanRig5x5")
+        Args:
+            chunk_size: Side length of the chunk in Blender units.
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+        """
+        chunk_name = f"OceanChunk{grid_size}x{grid_size}"
+        rig_name = f"OceanRig{grid_size}x{grid_size}"
+
+        mesh_obj = bpy.data.objects.get(chunk_name)
+        if not mesh_obj:
+            return {"error": f"{chunk_name} not found. Run create_ocean_mesh first."}
+
+        existing = bpy.data.objects.get(rig_name)
         if existing:
             bpy.data.objects.remove(existing, do_unlink=True)
 
         bpy.ops.object.select_all(action='DESELECT')
         bpy.ops.object.armature_add(location=(0, 0, 0))
         arm_obj = bpy.context.active_object
-        arm_obj.name = "OceanRig5x5"
-        arm_obj.data.name = "OceanRig5x5Data"
+        arm_obj.name = rig_name
+        arm_obj.data.name = f"{rig_name}Data"
 
         bpy.ops.object.mode_set(mode='EDIT')
         for b in list(arm_obj.data.edit_bones):
             arm_obj.data.edit_bones.remove(b)
 
-        # 5 bones span 4 intervals edge-to-edge for seamless tiling.
+        # grid_size bones span (grid_size-1) intervals edge-to-edge for seamless tiling.
         half = chunk_size / 2.0
-        spacing = chunk_size / 4.0
+        spacing = chunk_size / (grid_size - 1)
         names = []
-        for row in range(5):
-            for col in range(5):
-                name = f"Wave5x5_R{row}_C{col}"
+        for row in range(grid_size):
+            for col in range(grid_size):
+                name = f"Wave{grid_size}x{grid_size}_R{row}_C{col}"
                 bone = arm_obj.data.edit_bones.new(name)
                 x = -half + col * spacing
                 y = -half + row * spacing
@@ -2403,14 +2425,21 @@ class BlenderMCPServer:
             "spacing": round(spacing, 4),
         }
 
-    def bind_ocean_rig_5x5(self):
-        """Parent 5x5 ocean mesh to armature with automatic weights."""
-        mesh_obj = bpy.data.objects.get("OceanChunk5x5")
-        arm_obj = bpy.data.objects.get("OceanRig5x5")
+    def bind_ocean_rig(self, grid_size=5):
+        """Parent ocean mesh to armature with automatic weights.
+
+        Args:
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+        """
+        chunk_name = f"OceanChunk{grid_size}x{grid_size}"
+        rig_name = f"OceanRig{grid_size}x{grid_size}"
+
+        mesh_obj = bpy.data.objects.get(chunk_name)
+        arm_obj = bpy.data.objects.get(rig_name)
         if not mesh_obj:
-            return {"error": "OceanChunk5x5 not found"}
+            return {"error": f"{chunk_name} not found"}
         if not arm_obj:
-            return {"error": "OceanRig5x5 not found"}
+            return {"error": f"{rig_name} not found"}
 
         if mesh_obj.parent:
             mesh_obj.parent = None
@@ -2432,18 +2461,26 @@ class BlenderMCPServer:
             "group_count": len(groups),
         }
 
-    def export_ocean_fbx_5x5(self, filepath=""):
-        """Export 5x5 ocean chunk + rig as FBX with Roblox-compatible axis (no animation)."""
-        mesh_obj = bpy.data.objects.get("OceanChunk5x5")
-        arm_obj = bpy.data.objects.get("OceanRig5x5")
+    def export_ocean_fbx(self, grid_size=5, filepath=""):
+        """Export ocean chunk + rig as FBX with Roblox-compatible axis (no animation).
+
+        Args:
+            grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
+            filepath: Output path.  Defaults to ``OceanChunk{G}x{G}.fbx``.
+        """
+        chunk_name = f"OceanChunk{grid_size}x{grid_size}"
+        rig_name = f"OceanRig{grid_size}x{grid_size}"
+
+        mesh_obj = bpy.data.objects.get(chunk_name)
+        arm_obj = bpy.data.objects.get(rig_name)
         if not mesh_obj:
-            return {"error": "OceanChunk5x5 not found"}
+            return {"error": f"{chunk_name} not found"}
         if not arm_obj:
-            return {"error": "OceanRig5x5 not found"}
+            return {"error": f"{rig_name} not found"}
 
         if not filepath:
             base = bpy.path.abspath("//") if bpy.data.filepath else tempfile.gettempdir()
-            filepath = os.path.join(base, "OceanChunk5x5.fbx")
+            filepath = os.path.join(base, f"{chunk_name}.fbx")
         os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
 
         blend_path = filepath.replace(".fbx", ".blend")
