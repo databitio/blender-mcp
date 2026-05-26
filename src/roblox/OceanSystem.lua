@@ -124,12 +124,16 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 	local desiredTile = raw.studsPerTile or 16
 	local tilesPerChunk = math.max(1, math.round(chunkSize / desiredTile))
 
+	local gridRadius = raw.gridRadius or 2
+	local nearRadius = raw.nearRadius or 1
+	assert(nearRadius <= gridRadius, "OceanSystem: nearRadius must be <= gridRadius")
+
 	return {
 		chunkTemplate = template,
 		farChunkTemplate = farTemplate,
 		textureId = raw.textureId,
-		gridRadius = raw.gridRadius or 2,
-		nearRadius = raw.nearRadius or 1,
+		gridRadius = gridRadius,
+		nearRadius = nearRadius,
 		chunkSize = chunkSize,
 		studsPerTile = chunkSize / tilesPerChunk,
 		scrollSpeed = raw.scrollSpeed or Vector2.new(2, 1),
@@ -241,11 +245,11 @@ local function updateGrid(c: ResolvedConfig)
 	local nr = c.nearRadius
 	local hasFar = c.farChunkTemplate ~= nil
 
-	local needed: { [string]: { any } } = {}
+	local needed: { [string]: { cx: number, cz: number, tier: "near" | "far" } } = {}
 	for dx = -r, r do
 		for dz = -r, r do
 			local tier: "near" | "far" = if hasFar and math.max(math.abs(dx), math.abs(dz)) > nr then "far" else "near"
-			needed[chunkKey(cx + dx, cz + dz)] = { cx + dx, cz + dz, tier }
+			needed[chunkKey(cx + dx, cz + dz)] = { cx = cx + dx, cz = cz + dz, tier = tier }
 		end
 	end
 
@@ -257,16 +261,14 @@ local function updateGrid(c: ResolvedConfig)
 	end
 
 	for key, cell in pairs(needed) do
-		local tier: "near" | "far" = cell[3]
 		local existing = activeChunks[key]
-		if existing and existing.tier ~= tier then
+		if existing and existing.tier ~= cell.tier then
 			releaseChunk(existing)
 			activeChunks[key] = nil
-			existing = nil
 		end
 		if not activeChunks[key] then
-			local chunk = acquireChunk(c, tier)
-			chunk.part.Position = Vector3.new(cell[1] * c.chunkSize, c.baseHeight, cell[2] * c.chunkSize)
+			local chunk = acquireChunk(c, cell.tier)
+			chunk.part.Position = Vector3.new(cell.cx * c.chunkSize, c.baseHeight, cell.cz * c.chunkSize)
 			chunk.part.Parent = container
 			activeChunks[key] = chunk
 		end
