@@ -10,9 +10,9 @@
         Ocean.start({
             chunkTemplate = game.ReplicatedStorage.OceanChunk,
             textureId     = "rbxassetid://XXXXX",
-            gridRadius    = 2,
-            chunkSize     = 64,
-            studsPerTile  = 16,
+            gridRadius    = 1,
+            chunkSize     = 512,
+            studsPerTile  = 128,
             scrollSpeed   = Vector2.new(2, 1),
             baseHeight    = -10,
         })
@@ -60,15 +60,16 @@ type ChunkData = {
 	part: MeshPart,
 	bones: { Bone },
 	offsets: { Vector3 },
+	tex: Texture?,
 }
 
 local OceanSystem = {}
 
 local DEFAULT_WAVES: { WaveParams } = {
-	{ amplitude = 1.0, frequencyX = 1.0, frequencyZ = 0.0, phase = 0, speed = 1.0 },
-	{ amplitude = 0.8, frequencyX = 2.2, frequencyZ = 0.5, phase = 5.52, speed = 1.3 },
-	{ amplitude = 0.6, frequencyX = 0.5, frequencyZ = 2.9, phase = 0.93, speed = 0.8 },
-	{ amplitude = 0.4, frequencyX = 1.8, frequencyZ = 4.6, phase = 8.94, speed = 1.6 },
+	{ amplitude = 3.0, frequencyX = 0.008, frequencyZ = 0.000, phase = 0,   speed = 0.6 },
+	{ amplitude = 2.0, frequencyX = 0.012, frequencyZ = 0.004, phase = 1.2, speed = 0.8 },
+	{ amplitude = 1.5, frequencyX = 0.004, frequencyZ = 0.010, phase = 2.5, speed = 0.5 },
+	{ amplitude = 1.0, frequencyX = 0.010, frequencyZ = 0.008, phase = 4.0, speed = 1.0 },
 }
 
 -- Module state
@@ -81,6 +82,8 @@ local scrollU: number = 0
 local scrollV: number = 0
 local elapsed: number = 0
 local warnedNoBones: boolean = false
+local lastCX: number = math.huge
+local lastCZ: number = math.huge
 
 local function chunkKey(cx: number, cz: number): string
 	return cx .. "," .. cz
@@ -94,7 +97,7 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 		else raw.chunkTemplate:FindFirstChildWhichIsA("MeshPart", true)
 	assert(template, "OceanSystem: chunkTemplate must be or contain a MeshPart")
 
-	local chunkSize = template.Size.X
+	local chunkSize = raw.chunkSize or template.Size.X
 	local desiredTile = raw.studsPerTile or 16
 	local tilesPerChunk = math.max(1, math.round(chunkSize / desiredTile))
 
@@ -159,9 +162,11 @@ local function createChunk(c: ResolvedConfig): ChunkData
 	part.Anchored = true
 	part.CanCollide = false
 	part.CastShadow = false
+	part.Size = Vector3.new(c.chunkSize, part.Size.Y, c.chunkSize)
 
+	local tex: Texture? = nil
 	if c.textureId then
-		local tex = Instance.new("Texture")
+		tex = Instance.new("Texture")
 		tex.Texture = c.textureId
 		tex.Face = Enum.NormalId.Top
 		tex.StudsPerTileU = c.studsPerTile
@@ -170,7 +175,7 @@ local function createChunk(c: ResolvedConfig): ChunkData
 	end
 
 	local bones, offsets = cacheBones(part)
-	return { part = part, bones = bones, offsets = offsets }
+	return { part = part, bones = bones, offsets = offsets, tex = tex }
 end
 
 local function acquireChunk(c: ResolvedConfig): ChunkData
@@ -197,6 +202,13 @@ local function updateGrid(c: ResolvedConfig)
 	local pos = cam.CFrame.Position
 	local cx = math.floor(pos.X / c.chunkSize)
 	local cz = math.floor(pos.Z / c.chunkSize)
+
+	if cx == lastCX and cz == lastCZ then
+		return
+	end
+	lastCX = cx
+	lastCZ = cz
+
 	local r = c.gridRadius
 
 	local needed: { [string]: { number } } = {}
@@ -228,7 +240,7 @@ local function updateTextures(c: ResolvedConfig, dt: number)
 	scrollV = (scrollV + c.scrollSpeed.Y * dt) % c.studsPerTile
 
 	for _, chunk in pairs(activeChunks) do
-		local tex = chunk.part:FindFirstChildOfClass("Texture")
+		local tex = chunk.tex
 		if tex then
 			tex.OffsetStudsU = scrollU + chunk.part.Position.X
 			tex.OffsetStudsV = scrollV + chunk.part.Position.Z
@@ -247,6 +259,8 @@ function OceanSystem.start(rawConfig: OceanConfig)
 	scrollV = 0
 	elapsed = 0
 	warnedNoBones = false
+	lastCX = math.huge
+	lastCZ = math.huge
 
 	container = Instance.new("Folder")
 	container.Name = "OceanChunks"
@@ -286,6 +300,8 @@ function OceanSystem.stop()
 	scrollU = 0
 	scrollV = 0
 	elapsed = 0
+	lastCX = math.huge
+	lastCZ = math.huge
 end
 
 return OceanSystem

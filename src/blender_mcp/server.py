@@ -1086,20 +1086,19 @@ def import_generated_asset_hunyuan(
         return f"Error generating Hunyuan3D task: {str(e)}"
 
 
-@telemetry_tool("create_ocean_mesh_4x4")
+@telemetry_tool("create_ocean_mesh_5x5")
 @mcp.tool()
-def create_ocean_mesh_4x4(ctx: Context, chunk_size: int = 64, subdivisions: int = 8) -> str:
+def create_ocean_mesh_5x5(ctx: Context, chunk_size: int = 512, subdivisions: int = 16) -> str:
     """
-    Create the 4x4 ocean chunk mesh: an 8x8 subdivided plane with flat shading and planar UVs.
-    Higher resolution variant of create_ocean_mesh for use with the 4x4 bone grid.
+    Create the 5x5 ocean chunk mesh: a subdivided plane with flat shading and planar UVs.
 
     Parameters:
-    - chunk_size: Size in Blender units, maps 1:1 to Roblox studs (default 64)
-    - subdivisions: Quad subdivisions per axis (default 8 = 128 triangles)
+    - chunk_size: Size in Blender units, maps 1:1 to Roblox studs (default 512)
+    - subdivisions: Quad subdivisions per axis (default 16 = 512 triangles)
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("create_ocean_mesh_4x4", {
+        result = blender.send_command("create_ocean_mesh_5x5", {
             "chunk_size": chunk_size,
             "subdivisions": subdivisions,
         })
@@ -1107,7 +1106,7 @@ def create_ocean_mesh_4x4(ctx: Context, chunk_size: int = 64, subdivisions: int 
             return f"Error: {result['result']['error']}"
         r = result.get("result", {})
         return (
-            f"Ocean mesh '{r['name']}' created (4x4 variant).\n"
+            f"Ocean mesh '{r['name']}' created (5x5 variant).\n"
             f"Vertices: {r['vertices']}, Faces: {r['faces']}, "
             f"Triangles: {r['triangles']}\n"
             f"Size: {r['chunk_size']}x{r['chunk_size']}, "
@@ -1115,67 +1114,67 @@ def create_ocean_mesh_4x4(ctx: Context, chunk_size: int = 64, subdivisions: int 
             f"UVs: planar 0-1, Shading: flat"
         )
     except Exception as e:
-        logger.error(f"Error creating ocean mesh 4x4: {str(e)}")
-        return f"Error creating ocean mesh 4x4: {str(e)}"
+        logger.error(f"Error creating ocean mesh 5x5: {str(e)}")
+        return f"Error creating ocean mesh 5x5: {str(e)}"
 
 
-@telemetry_tool("create_ocean_rig_4x4")
+@telemetry_tool("create_ocean_rig_5x5")
 @mcp.tool()
-def create_ocean_rig_4x4(ctx: Context, chunk_size: int = 64) -> str:
+def create_ocean_rig_5x5(ctx: Context, chunk_size: int = 512) -> str:
     """
-    Create a 4x4 bone grid armature for the ocean chunk. Bones are named
-    Wave4x4_R{row}_C{col} and placed at even intervals across the plane.
-    Requires OceanChunk4x4 mesh to exist (run create_ocean_mesh_4x4 first).
+    Create a 5x5 bone grid armature for the ocean chunk. Bones are named
+    Wave5x5_R{row}_C{col} and placed edge-to-edge across the plane for
+    seamless tiling. Requires OceanChunk5x5 mesh to exist.
 
     Parameters:
-    - chunk_size: Must match the chunk_size used in create_ocean_mesh_4x4 (default 64)
+    - chunk_size: Must match the chunk_size used in create_ocean_mesh_5x5 (default 512)
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("create_ocean_rig_4x4", {
+        result = blender.send_command("create_ocean_rig_5x5", {
             "chunk_size": chunk_size,
         })
         if "error" in result.get("result", {}):
             return f"Error: {result['result']['error']}"
         r = result.get("result", {})
         return (
-            f"Ocean rig '{r['name']}' created with {r['bone_count']} bones (4x4 variant).\n"
+            f"Ocean rig '{r['name']}' created with {r['bone_count']} bones (5x5 variant).\n"
             f"Bone spacing: {r['spacing']} units\n"
             f"Bones: {', '.join(r['bones'])}"
         )
     except Exception as e:
-        logger.error(f"Error creating ocean rig 4x4: {str(e)}")
-        return f"Error creating ocean rig 4x4: {str(e)}"
+        logger.error(f"Error creating ocean rig 5x5: {str(e)}")
+        return f"Error creating ocean rig 5x5: {str(e)}"
 
 
-@telemetry_tool("bind_ocean_rig_4x4")
+@telemetry_tool("bind_ocean_rig_5x5")
 @mcp.tool()
-def bind_ocean_rig_4x4(ctx: Context) -> str:
+def bind_ocean_rig_5x5(ctx: Context) -> str:
     """
-    Bind the OceanChunk4x4 mesh to the OceanRig4x4 armature using automatic weights.
+    Bind the OceanChunk5x5 mesh to the OceanRig5x5 armature using automatic weights.
     Each bone gets a vertex group influencing its local region of the mesh.
-    Requires both OceanChunk4x4 and OceanRig4x4 to exist.
+    Requires both OceanChunk5x5 and OceanRig5x5 to exist.
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("bind_ocean_rig_4x4", {})
+        result = blender.send_command("bind_ocean_rig_5x5", {})
         if "error" in result.get("result", {}):
             return f"Error: {result['result']['error']}"
         r = result.get("result", {})
         return (
-            f"Bound '{r['mesh']}' to '{r['armature']}' with automatic weights (4x4 variant).\n"
+            f"Bound '{r['mesh']}' to '{r['armature']}' with automatic weights (5x5 variant).\n"
             f"Vertex groups ({r['group_count']}): {', '.join(r['vertex_groups'])}"
         )
     except Exception as e:
-        logger.error(f"Error binding ocean rig 4x4: {str(e)}")
-        return f"Error binding ocean rig 4x4: {str(e)}"
+        logger.error(f"Error binding ocean rig 5x5: {str(e)}")
+        return f"Error binding ocean rig 5x5: {str(e)}"
 
 
-@telemetry_tool("export_ocean_chunk_4x4")
+@telemetry_tool("export_ocean_chunk_5x5")
 @mcp.tool()
-def export_ocean_chunk_4x4(ctx: Context, filepath: str = "") -> str:
+def export_ocean_chunk_5x5(ctx: Context, filepath: str = "") -> str:
     """
-    Export the OceanChunk4x4 mesh and OceanRig4x4 armature as FBX with Roblox-compatible
+    Export the OceanChunk5x5 mesh and OceanRig5x5 armature as FBX with Roblox-compatible
     settings. Also saves a .blend checkpoint. Axis: -Z forward, Y up.
 
     Parameters:
@@ -1183,7 +1182,7 @@ def export_ocean_chunk_4x4(ctx: Context, filepath: str = "") -> str:
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("export_ocean_fbx_4x4", {
+        result = blender.send_command("export_ocean_fbx_5x5", {
             "filepath": filepath,
         })
         if "error" in result.get("result", {}):
@@ -1191,7 +1190,7 @@ def export_ocean_chunk_4x4(ctx: Context, filepath: str = "") -> str:
         r = result.get("result", {})
         size_kb = round(r["fbx_size_bytes"] / 1024, 1)
         return (
-            f"Exported ocean chunk (4x4 variant):\n"
+            f"Exported ocean chunk (5x5 variant):\n"
             f"  FBX: {r['fbx_path']} ({size_kb} KB)\n"
             f"  Blend: {r['blend_path']}\n"
             f"  Axis: {r['settings']['axis_forward']} fwd, "
@@ -1199,8 +1198,8 @@ def export_ocean_chunk_4x4(ctx: Context, filepath: str = "") -> str:
             f"  Leaf bones: off, Animation: off"
         )
     except Exception as e:
-        logger.error(f"Error exporting ocean chunk 4x4: {str(e)}")
-        return f"Error exporting ocean chunk 4x4: {str(e)}"
+        logger.error(f"Error exporting ocean chunk 5x5: {str(e)}")
+        return f"Error exporting ocean chunk 5x5: {str(e)}"
 
 
 @mcp.prompt()
@@ -1294,9 +1293,9 @@ def asset_creation_strategy() -> str:
     """
 
 @mcp.prompt()
-def ocean_chunk_4x4_workflow() -> str:
-    """Step-by-step workflow for creating a 4x4 tiling ocean chunk in Blender"""
-    return """Ocean Chunk 4x4 Authoring Workflow
+def ocean_chunk_5x5_workflow() -> str:
+    """Step-by-step workflow for creating a 5x5 tiling ocean chunk in Blender"""
+    return """Ocean Chunk 5x5 Authoring Workflow
 ===================================
 
 Rigged mesh for use with OceanSystem.lua (bone-driven sine wave displacement).
@@ -1306,21 +1305,21 @@ PHASE 1 — SETUP
   Call get_scene_info() to verify the MCP connection is live.
 
 PHASE 2 — MESH (checkpoint after)
-  Call create_ocean_mesh_4x4(chunk_size=64, subdivisions=8).
-  Expected: 81 vertices, 64 faces, 128 triangles, flat shaded, UVs 0-1.
+  Call create_ocean_mesh_5x5(chunk_size=512, subdivisions=16).
+  Expected: 289 vertices, 256 faces, 512 triangles, flat shaded, UVs 0-1.
   -> Take a viewport screenshot for the user to inspect geometry.
 
 PHASE 3 — RIG (checkpoint after)
-  Call create_ocean_rig_4x4(chunk_size=64).
-  Expected: 16 bones named Wave4x4_R{0-3}_C{0-3}, spaced 16 units apart.
+  Call create_ocean_rig_5x5(chunk_size=512).
+  Expected: 25 bones named Wave5x5_R{0-4}_C{0-4}, edge-aligned at chunk boundary, 128 unit spacing.
   -> Take a viewport screenshot for the user to inspect bone placement.
 
 PHASE 4 — BIND
-  Call bind_ocean_rig_4x4().
-  Expected: 16 vertex groups, one per bone, automatic weights applied.
+  Call bind_ocean_rig_5x5().
+  Expected: 25 vertex groups, one per bone, automatic weights applied.
 
 PHASE 5 — EXPORT (checkpoint after)
-  Call export_ocean_chunk_4x4().
+  Call export_ocean_chunk_5x5().
   Expected: FBX with rigged mesh (no animation) + .blend checkpoint saved.
   Settings: -Z forward, Y up, no leaf bones, bake_anim=off.
 
