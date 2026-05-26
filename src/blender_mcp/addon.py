@@ -2334,6 +2334,8 @@ class BlenderMCPServer:
                 ``(grid_size - 1) * 2`` which gives 2 quads per bone
                 interval per axis.
         """
+        if grid_size < 2:
+            return {"error": "grid_size must be >= 2"}
         if subdivisions is None:
             subdivisions = (grid_size - 1) * 2
 
@@ -2381,6 +2383,8 @@ class BlenderMCPServer:
             chunk_size: Side length of the chunk in Blender units.
             grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
         """
+        if grid_size < 2:
+            return {"error": "grid_size must be >= 2"}
         chunk_name = f"OceanChunk{grid_size}x{grid_size}"
         rig_name = f"OceanRig{grid_size}x{grid_size}"
 
