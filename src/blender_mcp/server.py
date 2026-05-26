@@ -1088,20 +1088,24 @@ def import_generated_asset_hunyuan(
 
 @telemetry_tool("create_ocean_mesh")
 @mcp.tool()
-def create_ocean_mesh(ctx: Context, chunk_size: int = 512, grid_size: int = 5) -> str:
+def create_ocean_mesh(ctx: Context, chunk_size: int = 512, grid_size: int = 5, depth: int = 64) -> str:
     """
-    Create an ocean chunk mesh: a subdivided plane with flat shading and planar UVs.
-    The addon derives subdivision count from grid_size automatically.
+    Create an ocean chunk box mesh: subdivided top surface with simple side
+    walls and a flat bottom.  The addon derives subdivision count from
+    grid_size automatically.
 
     Parameters:
     - chunk_size: Size in Blender units, maps 1:1 to Roblox studs (default 512)
     - grid_size: Bone grid dimensions (e.g. 5 = 5x5, 3 = 3x3). Default 5.
+    - depth: Height of the box below the surface in Blender units (default 64).
+             Set to 0 for a flat plane (legacy behavior).
     """
     try:
         blender = get_blender_connection()
         result = blender.send_command("create_ocean_mesh", {
             "chunk_size": chunk_size,
             "grid_size": grid_size,
+            "depth": depth,
         })
         if "error" in result:
             return f"Error: {result['error']}"
@@ -1110,6 +1114,7 @@ def create_ocean_mesh(ctx: Context, chunk_size: int = 512, grid_size: int = 5) -
             f"Vertices: {result['vertices']}, Faces: {result['faces']}, "
             f"Triangles: {result['triangles']}\n"
             f"Size: {result['chunk_size']}x{result['chunk_size']}, "
+            f"Depth: {result['depth']}, "
             f"Subdivisions: {result['subdivisions']}x{result['subdivisions']}\n"
             f"UVs: planar 0-1, Shading: flat"
         )

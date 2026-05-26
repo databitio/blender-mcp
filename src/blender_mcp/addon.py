@@ -1,6 +1,7 @@
 # Code created by Siddharth Ahuja: www.github.com/ahujasid © 2025
 
 import re
+import bmesh
 import bpy
 import mathutils
 import json
@@ -2324,15 +2325,17 @@ class BlenderMCPServer:
                 print(f"Failed to clean up temporary directory {temp_dir}: {e}")
     #endregion
 
-    def create_ocean_mesh(self, chunk_size=512, grid_size=5, subdivisions=None):
-        """Create subdivided plane with flat shading and planar UVs for ocean chunk.
+    def create_ocean_mesh(self, chunk_size=512, grid_size=5, subdivisions=None, depth=64):
+        """Create ocean chunk box mesh: subdivided top surface with simple side
+        walls and a flat bottom.
 
         Args:
-            chunk_size: Side length of the plane in Blender units.
+            chunk_size: Side length of the chunk in Blender units.
             grid_size: Bone grid dimension (e.g. 5 for 5x5, 3 for 3x3).
             subdivisions: Mesh subdivision count.  Defaults to
                 ``(grid_size - 1) * 2`` which gives 2 quads per bone
                 interval per axis.
+            depth: Height of the box extending below the surface (default 64).
         """
         if grid_size < 2:
             return {"error": "grid_size must be >= 2"}
@@ -2352,10 +2355,67 @@ class BlenderMCPServer:
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.subdivide(number_cuts=subdivisions - 1)
-        bpy.ops.mesh.faces_shade_flat()
         bpy.ops.object.mode_set(mode='OBJECT')
 
+        if depth > 0:
+            mesh = plane.data
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+
+            boundary_edges = set()
+            for e in bm.edges:
+                if len(e.link_faces) == 1:
+                    boundary_edges.add(e)
+
+            start_edge = next(iter(boundary_edges))
+            current_vert = start_edge.verts[0]
+            current_edge = start_edge
+            ordered_verts = [current_vert]
+            used_edges = {current_edge}
+
+            while True:
+                next_vert = current_edge.other_vert(current_vert)
+                next_edge = None
+                for e in next_vert.link_edges:
+                    if e in boundary_edges and e not in used_edges:
+                        next_edge = e
+                        break
+                if next_edge is None:
+                    break
+                ordered_verts.append(next_vert)
+                current_vert = next_vert
+                current_edge = next_edge
+                used_edges.add(next_edge)
+
+            bottom_verts = []
+            vert_map = {}
+            for v in ordered_verts:
+                bv = bm.verts.new((v.co.x, v.co.y, -depth))
+                bottom_verts.append(bv)
+                vert_map[v] = bv
+            bm.verts.ensure_lookup_table()
+
+            n = len(ordered_verts)
+            for i in range(n):
+                tv1 = ordered_verts[i]
+                tv2 = ordered_verts[(i + 1) % n]
+                bv1 = vert_map[tv1]
+                bv2 = vert_map[tv2]
+                bm.faces.new([tv1, bv1, bv2, tv2])
+
+            bm.faces.new(list(reversed(bottom_verts)))
+
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+            bm.to_mesh(mesh)
+            bm.free()
+            mesh.update()
+
         mesh = plane.data
+        for poly in mesh.polygons:
+            poly.use_smooth = False
+
         uv_layer = mesh.uv_layers.active or mesh.uv_layers.new(name="UVMap")
         half = chunk_size / 2.0
         for poly in mesh.polygons:
@@ -2370,10 +2430,11 @@ class BlenderMCPServer:
             "name": plane.name,
             "vertices": len(mesh.vertices),
             "faces": len(mesh.polygons),
-            "triangles": len(mesh.polygons) * 2,
+            "triangles": sum(len(p.vertices) - 2 for p in mesh.polygons),
             "chunk_size": chunk_size,
             "grid_size": grid_size,
             "subdivisions": subdivisions,
+            "depth": depth,
         }
 
     def create_ocean_rig(self, chunk_size=512, grid_size=5):
@@ -2456,6 +2517,11 @@ class BlenderMCPServer:
         arm_obj.select_set(True)
         bpy.context.view_layer.objects.active = arm_obj
         bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+
+        for v in mesh_obj.data.vertices:
+            if v.co.z < -0.5:
+                for g in v.groups:
+                    g.weight = 0.0
 
         groups = [g.name for g in mesh_obj.vertex_groups]
         return {

@@ -54,6 +54,8 @@ export type OceanConfig = {
 	foamEdges: boolean?,
 	waves: { WaveParams }?,
 	waveSpeed: number?,
+	color: Color3?,
+	transparency: number?,
 }
 
 type ResolvedConfig = {
@@ -69,6 +71,8 @@ type ResolvedConfig = {
 	foamEdges: boolean,
 	waves: { WaveParams },
 	waveSpeed: number,
+	color: Color3,
+	transparency: number,
 }
 
 type ChunkData = {
@@ -143,6 +147,8 @@ local function resolveConfig(raw: OceanConfig): ResolvedConfig
 		foamEdges = if raw.foamEdges ~= nil then raw.foamEdges else false,
 		waves = raw.waves or DEFAULT_WAVES,
 		waveSpeed = raw.waveSpeed or 1.0,
+		color = raw.color or Color3.fromRGB(18, 64, 99),
+		transparency = raw.transparency or 0,
 	}
 end
 
@@ -194,6 +200,8 @@ local function createChunk(c: ResolvedConfig, tier: "near" | "far"): ChunkData
 	part.Anchored = true
 	part.CanCollide = false
 	part.CastShadow = false
+	part.Color = c.color
+	part.Transparency = c.transparency
 	part.Size = Vector3.new(c.chunkSize, part.Size.Y, c.chunkSize)
 
 	local tex: Texture? = nil
@@ -363,6 +371,8 @@ function OceanSystem.setConfig(overrides: {
 	waveSpeed: number?,
 	scrollSpeed: Vector2?,
 	baseHeight: number?,
+	color: Color3?,
+	transparency: number?,
 })
 	assert(running and activeConfig, "OceanSystem: must be running to call setConfig")
 	local c = activeConfig
@@ -381,6 +391,18 @@ function OceanSystem.setConfig(overrides: {
 		for _, chunk in pairs(activeChunks) do
 			local pos = chunk.part.Position
 			chunk.part.Position = Vector3.new(pos.X, c.baseHeight, pos.Z)
+		end
+	end
+	if overrides.color then
+		c.color = overrides.color
+		for _, chunk in pairs(activeChunks) do
+			chunk.part.Color = c.color
+		end
+	end
+	if overrides.transparency ~= nil then
+		c.transparency = overrides.transparency
+		for _, chunk in pairs(activeChunks) do
+			chunk.part.Transparency = c.transparency
 		end
 	end
 end
